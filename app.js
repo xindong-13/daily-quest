@@ -1544,6 +1544,41 @@ function openGoalLog(goalId) {
   }));
 }
 
+/* ---------- 建表語法（貼到 Supabase） ---------- */
+
+function openSqlHelp() {
+  const sql = syncSql();
+  ge = { text: true };
+  $('#modal-body').innerHTML = `
+    <div class="mhead">
+      <div><div class="mh-d">建立資料表</div>
+           <div class="mh-s">每個 Supabase 專案只要做一次</div></div>
+      <button class="icobtn" id="sq-x">✕</button>
+    </div>
+    <p class="hint" style="margin-top:0">
+      1. 打開 supabase.com → 你的專案<br>
+      2. 左邊選單找 <b>SQL Editor</b>（終端機圖示 <code>&gt;_</code>）→ <b>New query</b><br>
+      3. 把下面整段貼進去 → 按右上角綠色的 <b>Run</b><br>
+      4. 看到 <b>Success</b> 就完成了，回來按「連線」
+    </p>
+    <textarea id="sq-area" readonly spellcheck="false"
+      style="height:190px;font-family:monospace;font-size:11.5px;line-height:1.5;resize:none">${esc(sql)}</textarea>
+    <button class="btn" id="sq-copy" style="margin-top:12px">📋 複製語法</button>
+    <p class="hint">這段的意思：建一張表存你的資料，用「同步代碼」當鑰匙。
+    另外兩個 App（Kotoba、Echo）用的是各自不同的表，彼此不會衝突。</p>`;
+  $('#modal').classList.add('show');
+  $('#sq-x').addEventListener('click', closeModal);
+  $('#sq-copy').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(sql); toast('✅ 已複製，去 Supabase 貼上'); }
+    catch (e) {
+      const a = $('#sq-area');
+      try { a.removeAttribute('readonly'); a.focus(); a.setSelectionRange(0, a.value.length);
+            document.execCommand('copy'); a.setAttribute('readonly', 'readonly'); toast('✅ 已複製'); }
+      catch (e2) { toast('請手動選取框內文字複製'); }
+    }
+  });
+}
+
 /* ---------- 文字備份（iPhone 最可靠） ---------- */
 
 function openTextBackup() {
@@ -1649,34 +1684,36 @@ function viewSettings() {
       <h2>☁️ 雲端同步<span class="sub">電腦與手機共用同一份資料</span></h2>
       <div id="sync-line" class="syncline">${syncStatusHtml()}</div>
 
-      ${!syncConfigured() ? `
-        <p class="hint" style="margin-top:0">還沒設定。照著資料夾裡的「<b>雲端同步設定教學.md</b>」建立一個免費 Supabase 專案，把兩個值貼進來。</p>
+      ${!syncReady() ? `
+        <p class="hint" style="margin-top:0">
+          不需要帳號密碼。填好專案資料、產生一組<b>同步代碼</b>，另一台裝置填同一組就會同步。
+        </p>
         <label class="fld" style="margin-top:14px"><span>Project URL</span>
-          <input id="sy-url" placeholder="https://xxxxxxxx.supabase.co" spellcheck="false"></label>
+          <input id="sy-url" value="${esc(sync.url)}" placeholder="https://xxxxxxxx.supabase.co" spellcheck="false"></label>
         <label class="fld"><span>anon public key</span>
-          <input id="sy-key" placeholder="eyJhbGciOi..." spellcheck="false"></label>
-        <button class="btn" id="sy-save">儲存設定</button>
-      ` : !syncReady() ? `
-        <p class="hint" style="margin-top:0">已設定專案，接著登入。<b>電腦和手機要用同一組帳號密碼</b>，資料才會共用。</p>
-        <label class="fld" style="margin-top:14px"><span>電子信箱</span>
-          <input id="sy-email" type="email" value="${esc(sync.email)}" placeholder="you@example.com" spellcheck="false"></label>
-        <label class="fld"><span>密碼<span style="font-weight:600"> — 至少 6 個字，自己設一組就好</span></span>
-          <input id="sy-pw" type="password" placeholder="••••••"></label>
-        <div class="row">
-          <button class="btn ghost" id="sy-signup">第一次：註冊</button>
-          <button class="btn" id="sy-login">登入</button>
+          <input id="sy-key" value="${esc(sync.key)}" placeholder="eyJhbGciOi..." spellcheck="false"></label>
+
+        <button class="btn ghost sm" id="sy-sql" style="width:100%;margin-bottom:14px">📋 顯示要貼到 Supabase 的建表語法</button>
+
+        <label class="fld"><span>同步代碼<span style="font-weight:600"> — 兩台裝置要填一模一樣</span></span>
+          <input id="sy-code" value="${esc(sync.code)}" placeholder="DQ-XXXX-XXXX-XXXX" spellcheck="false"
+                 style="font-family:monospace;letter-spacing:.5px"></label>
+        <div class="row" style="margin-bottom:14px">
+          <button class="btn ghost sm" style="width:100%" id="sy-gen">🎲 產生新代碼</button>
+          <button class="btn ghost sm" style="width:100%" id="sy-paste">📥 我已經有代碼了</button>
         </div>
-        <button class="btn danger sm" id="sy-forget" style="margin-top:12px;width:auto">清除專案設定</button>
+        <button class="btn" id="sy-connect">連線</button>
+        ${syncConfigured() ? `<button class="btn danger sm" id="sy-forget" style="margin-top:12px;width:auto">清除設定</button>` : ''}
       ` : `
-        <div class="mrow" style="margin-top:12px">
-          <div class="m-main">
-            <div class="m-name">${esc(sync.email)}</div>
-            <div class="t-meta"><span class="dim">已登入・改任何東西都會自動上傳</span></div>
-          </div>
+        <div class="codebox">
+          <div class="cb-lab">你的同步代碼</div>
+          <div class="cb-code" id="sy-showcode">${esc(sync.code)}</div>
+          <button class="btn ghost sm" id="sy-copycode" style="margin-top:10px">📋 複製代碼</button>
         </div>
+        <p class="hint">另一台裝置：設定 → 雲端同步 → 填一樣的 Project URL、anon key 和<b>這組代碼</b> → 連線。</p>
         <div class="row" style="margin-top:10px">
           <button class="btn" id="sy-now">🔄 立即同步</button>
-          <button class="btn ghost" style="flex:0 0 90px" id="sy-out">登出</button>
+          <button class="btn ghost" style="flex:0 0 90px" id="sy-out">停用</button>
         </div>
         <p class="hint">兩邊的變更會<b>自動合併</b>：電腦新增的任務、手機勾掉的紀錄都會保留，不會互相覆蓋。</p>
         <hr class="sep">
@@ -1685,7 +1722,8 @@ function viewSettings() {
           <button class="btn ghost sm" style="width:100%" id="sy-force-local">⬆ 以這台為準<br><span class="dim" style="font-weight:600">覆蓋雲端</span></button>
           <button class="btn ghost sm" style="width:100%" id="sy-force-remote">⬇ 以雲端為準<br><span class="dim" style="font-weight:600">覆蓋這台</span></button>
         </div>
-        <p class="hint">⚠️ 這兩個是「整份覆蓋」，被蓋掉的那一份會先自動存成快照，可以在下面的 🕘 自動快照 救回來。</p>
+        <p class="hint">⚠️ 這兩個是「整份覆蓋」，被蓋掉的那一份會先自動存成快照，可以在下面的 🕘 自動快照 救回來。<br>
+        🔒 代碼就是鑰匙，不要貼到公開的地方。</p>
       `}
     </div>
 
@@ -2017,37 +2055,48 @@ function wire() {
   if ($('#g-add')) $('#g-add').addEventListener('click', addGoal);
 
   // 雲端同步
-  if ($('#sy-save')) $('#sy-save').addEventListener('click', () => {
+  if ($('#sy-gen')) $('#sy-gen').addEventListener('click', () => {
+    $('#sy-code').value = makeSyncCode();
+    toast('已產生代碼，記得抄下來給另一台裝置用');
+  });
+  if ($('#sy-paste')) $('#sy-paste').addEventListener('click', () => {
+    const el = $('#sy-code');
+    if (el && el.focus) el.focus();
+    toast('把另一台裝置的代碼貼到「同步代碼」欄位');
+  });
+  if ($('#sy-sql')) $('#sy-sql').addEventListener('click', () => openSqlHelp());
+  if ($('#sy-connect')) $('#sy-connect').addEventListener('click', async () => {
     const u = $('#sy-url').value.trim().replace(/\/+$/, '');
     const k = $('#sy-key').value.trim();
-    if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(u)) return toast('Project URL 看起來不對，應該長得像 https://xxxx.supabase.co');
+    const c = $('#sy-code').value.trim().toUpperCase();
+    if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(u)) return toast('Project URL 應該長得像 https://xxxx.supabase.co');
     if (k.length < 40) return toast('anon key 看起來不完整，請整串複製');
-    sync.url = u; sync.key = k; saveSync(); render(); toast('已儲存，接著登入');
+    if (c.length < 8) return toast('請先按「產生新代碼」，或貼上另一台的代碼');
+
+    const prev = { ...sync };
+    sync.url = u; sync.key = k; sync.code = c;
+    setSyncStatus('syncing');
+    const t = await syncSelfTest().catch(() => ({ ok: false, msg: '連不上網路' }));
+    if (!t.ok) {
+      sync = prev;
+      setSyncStatus('error', t.msg);
+      toast('❌ ' + t.msg);
+      return render();
+    }
+    saveSync();
+    render();
+    await firstSync();
+    render();
+  });
+  if ($('#sy-copycode')) $('#sy-copycode').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(sync.code); toast('✅ 已複製代碼'); }
+    catch (e) { toast('請長按上面的代碼手動複製'); }
   });
   if ($('#sy-forget')) $('#sy-forget').addEventListener('click', () => {
-    if (!confirm('清除專案設定？本機資料不會被刪除。')) return;
-    sync = { url: '', key: '', email: '', uid: '', access: '', refresh: '', lastAt: null, status: 'off', error: '' };
+    if (!confirm('清除設定？本機資料不會被刪除。')) return;
+    sync = { url: '', key: '', code: '', lastAt: null, status: 'off', error: '' };
     saveSync(); render();
   });
-  const doAuth = async (mode) => {
-    const email = $('#sy-email').value.trim();
-    const pw = $('#sy-pw').value;
-    if (!email || !pw) return toast('請填信箱與密碼');
-    if (pw.length < 6) return toast('密碼至少 6 個字');
-    setSyncStatus('syncing');
-    try {
-      await sbAuth(email, pw, mode);
-      render();
-      await firstSync();
-      render();
-    } catch (e) {
-      setSyncStatus('error', e.message);
-      toast('❌ ' + e.message);
-      render();
-    }
-  };
-  if ($('#sy-login'))  $('#sy-login').addEventListener('click', () => doAuth('login'));
-  if ($('#sy-signup')) $('#sy-signup').addEventListener('click', () => doAuth('signup'));
   if ($('#sy-now')) $('#sy-now').addEventListener('click', async () => {
     flushPush();
     const okp = await pullNow();
@@ -2065,8 +2114,8 @@ function wire() {
     render();
   });
   if ($('#sy-out')) $('#sy-out').addEventListener('click', () => {
-    if (!confirm('登出？這台的資料會留著，只是不再自動同步。')) return;
-    sync.access = ''; sync.refresh = ''; sync.uid = '';
+    if (!confirm('停用同步？這台的資料會留著，只是不再自動上傳下載。\n代碼會保留，隨時可以再連線。')) return;
+    sync.code = '';
     saveSync(); setSyncStatus('off'); render();
   });
 
@@ -2184,27 +2233,61 @@ function addGoal() {
    ========================================================= */
 
 const SYNC_KEY = 'daily_quest_sync';
+const SYNC_TABLE = 'daily_sync';
 
 let sync = {
   url: '', key: '',            // Supabase 專案網址與 anon key
-  email: '', uid: '',
-  access: '', refresh: '',
+  code: '',                    // 同步代碼：兩台裝置填同一組就會同步
   lastAt: null,                // 上次成功同步時間
   status: 'off',               // off | ready | syncing | ok | error | offline
   error: '',
 };
 
+/* 產生一組夠長、不會被猜到、也不會看錯字的代碼 */
+function makeSyncCode() {
+  const AB = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // 去掉 I O 0 1，避免看錯
+  const pick = (n) => {
+    let s = '';
+    const buf = (typeof crypto !== 'undefined' && crypto.getRandomValues)
+      ? crypto.getRandomValues(new Uint32Array(n)) : null;
+    for (let i = 0; i < n; i++) {
+      const r = buf ? buf[i] : Math.floor(Math.random() * 4294967296);
+      s += AB[r % AB.length];
+    }
+    return s;
+  };
+  return `DQ-${pick(4)}-${pick(4)}-${pick(4)}`;
+}
+
 function loadSync() {
   try {
     const o = JSON.parse(localStorage.getItem(SYNC_KEY) || 'null');
-    if (o) sync = { ...sync, ...o, status: 'off', error: '' };
+    if (!o) return;
+    // 舊版是用信箱＋密碼登入的，那些欄位不再需要；專案網址與金鑰可以留著繼續用
+    sync = {
+      url: o.url || '', key: o.key || '', code: o.code || '',
+      lastAt: o.lastAt || null, status: 'off', error: '',
+    };
   } catch (e) { /* ignore */ }
 }
 function saveSync() {
   try { localStorage.setItem(SYNC_KEY, JSON.stringify(sync)); } catch (e) { /* ignore */ }
 }
 function syncConfigured() { return !!(sync.url && sync.key); }
-function syncReady() { return !!(sync.url && sync.key && sync.access && sync.uid); }
+function syncReady() { return !!(sync.url && sync.key && sync.code); }
+
+/* 要貼到 Supabase SQL Editor 的建表語法 */
+function syncSql() {
+  return `create table if not exists ${SYNC_TABLE} (
+  code       text primary key,
+  data       jsonb not null,
+  updated_at timestamptz not null default now()
+);
+alter table ${SYNC_TABLE} enable row level security;
+drop policy if exists ${SYNC_TABLE}_all on ${SYNC_TABLE};
+create policy ${SYNC_TABLE}_all on ${SYNC_TABLE}
+  for all using (true) with check (true);`;
+}
 
 function setSyncStatus(s, err) {
   sync.status = s; sync.error = err || '';
@@ -2250,62 +2333,30 @@ function syncStatusHtml() {
   return `<span class="${cls}">●</span> ${txt}`;
 }
 
-async function sbFetch(path, opts = {}, allowRetry = true) {
+async function sbFetch(path, opts = {}) {
   const base = sync.url.replace(/\/+$/, '');
-  const res = await fetch(base + path, {
+  return fetch(base + path, {
     ...opts,
     keepalive: !!opts.keepalive,
     headers: {
       'apikey': sync.key,
+      'Authorization': 'Bearer ' + sync.key,
       'Content-Type': 'application/json',
-      ...(sync.access ? { 'Authorization': 'Bearer ' + sync.access } : {}),
       ...(opts.headers || {}),
     },
   });
-  if (res.status === 401 && allowRetry && sync.refresh) {
-    const okRefresh = await sbRefresh();
-    if (okRefresh) return sbFetch(path, opts, false);
-  }
-  return res;
 }
 
-async function sbRefresh() {
-  try {
-    const res = await fetch(sync.url.replace(/\/+$/, '') + '/auth/v1/token?grant_type=refresh_token', {
-      method: 'POST',
-      headers: { 'apikey': sync.key, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: sync.refresh }),
-    });
-    if (!res.ok) return false;
-    const j = await res.json();
-    if (!j.access_token) return false;
-    sync.access = j.access_token;
-    sync.refresh = j.refresh_token || sync.refresh;
-    saveSync();
-    return true;
-  } catch (e) { return false; }
-}
-
-async function sbAuth(email, password, mode) {
-  const path = mode === 'signup' ? '/auth/v1/signup' : '/auth/v1/token?grant_type=password';
-  const res = await fetch(sync.url.replace(/\/+$/, '') + path, {
-    method: 'POST',
-    headers: { 'apikey': sync.key, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
-  });
-  const j = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(j.msg || j.error_description || j.message || j.error || `HTTP ${res.status}`);
+/* 連線測試：確認網址、金鑰、資料表都設定好了 */
+async function syncSelfTest() {
+  const res = await sbFetch(`/rest/v1/${SYNC_TABLE}?select=code&limit=1`);
+  if (res.ok) return { ok: true };
+  const t = await res.text().catch(() => '');
+  if (res.status === 401) return { ok: false, msg: 'anon key 不對或不完整，請整串重新複製' };
+  if (res.status === 404 || /does not exist|relation/i.test(t)) {
+    return { ok: false, msg: `找不到資料表 ${SYNC_TABLE}，請先到 Supabase 的 SQL Editor 貼上建表語法` };
   }
-  if (!j.access_token) {
-    throw new Error('註冊成功但需要先驗證信箱。請到 Supabase 後台把 Email 驗證關掉，或收信點驗證連結後再登入。');
-  }
-  sync.access = j.access_token;
-  sync.refresh = j.refresh_token || '';
-  sync.uid = (j.user && j.user.id) || '';
-  sync.email = email;
-  saveSync();
-  return true;
+  return { ok: false, msg: `連線失敗 ${res.status} ${t.slice(0, 80)}` };
 }
 
 async function pushNow(opts = {}) {
@@ -2313,11 +2364,11 @@ async function pushNow(opts = {}) {
   pendingPush = false;
   setSyncStatus('syncing');
   try {
-    const res = await sbFetch('/rest/v1/app_state', {
+    const res = await sbFetch(`/rest/v1/${SYNC_TABLE}`, {
       method: 'POST',
       keepalive: !!opts.keepalive,
       headers: { 'Prefer': 'resolution=merge-duplicates,return=minimal' },
-      body: JSON.stringify({ user_id: sync.uid, data: S, updated_at: S.updatedAt }),
+      body: JSON.stringify({ code: sync.code, data: S, updated_at: S.updatedAt }),
     });
     if (!res.ok) {
       const t = await res.text().catch(() => '');
@@ -2432,7 +2483,7 @@ async function pullNow(opts = {}) {
 
   setSyncStatus('syncing');
   try {
-    const res = await sbFetch(`/rest/v1/app_state?select=data,updated_at&user_id=eq.${encodeURIComponent(sync.uid)}`);
+    const res = await sbFetch(`/rest/v1/${SYNC_TABLE}?select=data,updated_at&code=eq.${encodeURIComponent(sync.code)}`);
     if (!res.ok) {
       const t = await res.text().catch(() => '');
       setSyncStatus('error', `下載失敗 ${res.status} ${t.slice(0, 90)}`);
@@ -2530,7 +2581,7 @@ async function firstSync() {
   if (!syncReady()) return;
   setSyncStatus('syncing');
   try {
-    const res = await sbFetch(`/rest/v1/app_state?select=data,updated_at&user_id=eq.${encodeURIComponent(sync.uid)}`);
+    const res = await sbFetch(`/rest/v1/${SYNC_TABLE}?select=data,updated_at&code=eq.${encodeURIComponent(sync.code)}`);
     if (!res.ok) { setSyncStatus('error', `連線失敗 ${res.status}`); return; }
     const rows = await res.json();
     if (!rows.length) { await pushNow(); toast('☁️ 已把這台的資料上傳到雲端'); return; }
@@ -2731,10 +2782,11 @@ if (typeof module !== 'undefined' && module.exports) {
     views: { viewToday, viewCalendar, viewManage, viewStats, viewGoals, viewSettings },
     viewWeek, viewMonth, goalCard, goalChart, lineChart,
     setState: (s) => { S = s; }, getState: () => S,
-    stateIsEmpty, syncStatusHtml, adoptRemote, openTextBackup, openTextRestore,
+    stateIsEmpty, syncStatusHtml, adoptRemote, openTextBackup, openTextRestore, openSqlHelp,
     mergeStates, contentSig, recomputeStats, touchDay,
     getSync: () => sync, setSync: (o) => { sync = { ...sync, ...o }; },
-    syncReady, syncConfigured, pushNow, pullNow, firstSync, sbAuth, save,
+    syncReady, syncConfigured, pushNow, pullNow, firstSync, save,
+    makeSyncCode, syncSql, syncSelfTest, SYNC_TABLE,
     flushPush, heroSyncLabel, isPendingPush: () => pendingPush,
     listSnapshots, pushSnapshot, restoreSnapshot, SNAP_KEY,
     setCalMode: (m) => { calMode = m; }, setWeekStart: (d) => { weekStart = d; },
