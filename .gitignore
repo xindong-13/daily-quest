@@ -2,8 +2,11 @@
 .deploy/
 .netlify/
 node_modules/
+temp.txt
 
 # Personal data - MUST stay off a public repo
 backups/
 *.json
-manifest.json
+
+# ...but the PWA manifest is part of the app and MUST be uploaded
+!manifest.json

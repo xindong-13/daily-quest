@@ -163,6 +163,98 @@ backups/          ← 你的個人備份 JSON
 
 ---
 
+# 忘記密碼／登不進去
+
+**先放心：你的資料不會因為密碼而消失。** 任務紀錄存在 Supabase 的 `app_state` 資料表裡，
+跟密碼是分開的兩件事。密碼只是拿資料的鑰匙，換一把就好。
+
+## ⛔ 絕對不要做的事
+
+**不要在 Supabase 刪掉使用者。**
+資料表設了 `on delete cascade`，刪掉帳號會**連你的任務資料一起刪掉**。
+
+## 先確認錯誤訊息是什麼
+
+App 的狀態列會寫原因，不同原因處理方式不一樣：
+
+| 訊息 | 意思 | 怎麼辦 |
+|---|---|---|
+| `Invalid login credentials` | 帳號或密碼不對 | 往下做「重設密碼」 |
+| `Email logins are disabled` | Email 登入被關掉了 | Authentication → Sign In / Providers → Email → 打開 **Enable Email provider** |
+| `同步失敗 401` | anon key 貼錯或不完整 | 重新整串複製一次 |
+| `需要先驗證信箱` | Confirm email 還開著 | 把它關掉 |
+
+## 步驟 1｜先確認資料真的在雲端
+
+Supabase → **SQL Editor** → New query，貼上執行：
+
+```sql
+select
+  user_id,
+  updated_at,
+  jsonb_array_length(data->'tasks') as 任務數,
+  jsonb_array_length(data->'goals') as 目標數
+from public.app_state;
+```
+
+看到一列、任務數 16 左右 → 資料好好的，繼續下一步。
+
+## 步驟 2｜確認你註冊的信箱到底是哪一個
+
+Supabase → **Authentication** → **Users**，看清單裡那一列的 Email。
+很可能只是打錯字（例如少一個字母、或用了另一個信箱）。
+
+**如果信箱其實是對的，只是密碼記錯了**，做步驟 3。
+
+## 步驟 3｜直接重設密碼（最可靠，不用收信）
+
+Supabase → **SQL Editor** → New query，把兩個地方換成你的，然後 Run：
+
+```sql
+update auth.users
+set encrypted_password = extensions.crypt('新密碼至少六個字', extensions.gen_salt('bf'))
+where email = 'jerry051194@gmail.com';
+```
+
+- 把 `新密碼至少六個字` 換成你要用的新密碼（保留單引號）
+- 把信箱換成步驟 2 看到的那一個
+
+看到 `Success. 1 row(s) affected` 就成功了。回 App 用新密碼登入。
+
+> 為什麼不用「寄重設信」：那個要另外設定轉址網址，比較容易卡住。直接改最快。
+
+## 步驟 4｜還是不行的話（保底方案）
+
+用新的信箱重新註冊一個帳號，再把舊資料搬過去：
+
+1. App 裡用新信箱**註冊**（例如 `jerry051194+dq@gmail.com`，Gmail 的 `+` 別名會寄到同一個信箱）
+2. 註冊完會建立一列空資料
+3. Supabase → SQL Editor 執行（把兩個信箱換成你的）：
+
+```sql
+-- 把舊帳號的資料複製到新帳號
+update public.app_state new_row
+set data = old_row.data,
+    updated_at = now()
+from public.app_state old_row
+where new_row.user_id = (select id from auth.users where email = '新信箱')
+  and old_row.user_id = (select id from auth.users where email = '舊信箱');
+```
+
+4. 回 App 按 **🔄 立即同步**
+
+## 完全不想碰 SQL 的話
+
+你的資料還有另外兩份，不需要雲端也能全部救回來：
+
+1. **步驟 0 存的備份文字** → 設定 → **📥 從文字還原**
+2. **`backups/每日任務備份_2026-08-15.json`** → 設定 → **⬆ 匯入檔案**
+
+先還原、照常用，密碼之後再處理。還原完之後記得在**資料最完整的那一台**
+按 **⬆ 以這台為準**，把雲端也蓋成正確的版本。
+
+---
+
 # 卡住的時候
 
 | 狀況 | 怎麼辦 |

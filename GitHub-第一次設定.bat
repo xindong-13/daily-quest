@@ -150,6 +150,10 @@ exit /b
 
 :GITIGNORE
 if not exist ".nojekyll" copy nul ".nojekyll" >nul
+rem A correct .gitignore ships with the app - never overwrite it.
+rem (Writing "!manifest.json" from a .bat does not work: with delayed
+rem  expansion the "!" is eaten, which would exclude the PWA manifest.)
+if exist ".gitignore" exit /b
 > .gitignore echo # Build / tooling folders - never upload these
 >> .gitignore echo .deploy/
 >> .gitignore echo .netlify/
@@ -157,8 +161,7 @@ if not exist ".nojekyll" copy nul ".nojekyll" >nul
 >> .gitignore echo.
 >> .gitignore echo # Personal data - MUST stay off a public repo
 >> .gitignore echo backups/
->> .gitignore echo *.json
->> .gitignore echo !manifest.json
+>> .gitignore echo *backup*.json
 exit /b
 
 :FAIL
