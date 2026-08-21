@@ -1,0 +1,9 @@
+# Build / tooling folders - never upload these
+.deploy/
+.netlify/
+node_modules/
+
+# Personal data - MUST stay off a public repo
+backups/
+*.json
+manifest.json

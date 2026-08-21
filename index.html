@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0c0e13">
+<title>每日任務</title>
+
+<link rel="stylesheet" href="style.css">
+<link rel="manifest" href="manifest.json">
+
+<!-- iPhone 加到主畫面 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="每日任務">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+</head>
+<body>
+
+<div id="banner">
+  <span>🔔</span><span id="banner-txt"></span>
+  <button id="banner-x">✕</button>
+</div>
+
+<div class="app">
+  <div class="hero" id="hero"></div>
+  <div id="view"></div>
+</div>
+
+<nav class="tabs">
+  <button data-tab="today" class="on"><span class="ti">🗓️</span>今日</button>
+  <button data-tab="calendar"><span class="ti">📅</span>行事曆</button>
+  <button data-tab="manage"><span class="ti">📋</span>事情</button>
+  <button data-tab="stats"><span class="ti">📊</span>成績</button>
+  <button data-tab="goals"><span class="ti">🎯</span>目標</button>
+  <button data-tab="settings"><span class="ti">⚙️</span>設定</button>
+</nav>
+
+<div id="modal"><div class="mbox" id="modal-body"></div></div>
+
+<div id="toast"></div>
+
+<!-- 有新版時從下方跳出來 -->
+<div id="updatebar">
+  <span>✨ 有新版本可以更新</span>
+  <button id="update-go">立即更新</button>
+  <button id="update-x">✕</button>
+</div>
+
+<div id="celebrate">
+  <div class="box">
+    <div class="em" id="cel-em">🎉</div>
+    <div class="ti" id="cel-ti"></div>
+    <div class="ds" id="cel-ds"></div>
+    <button class="btn" id="cel-close">繼續</button>
+  </div>
+</div>
+
+<script>const APPVER = 'dq-v11';</script>
+<script src="app.js"></script>
+<script>
+/* Service Worker：讓 App 可以離線用，並在有新版時提示更新。
+   用檔案直接開啟（file://）時會自動略過。 */
+(function () {
+  if (!('serviceWorker' in navigator) || !location.protocol.startsWith('http')) return;
+
+  var bar = document.getElementById('updatebar');
+  var waiting = null;
+
+  function showBar(w) {
+    waiting = w;
+    bar.classList.add('show');
+  }
+  document.getElementById('update-x').addEventListener('click', function () {
+    bar.classList.remove('show');
+  });
+  document.getElementById('update-go').addEventListener('click', function () {
+    bar.classList.remove('show');
+    try { if (waiting) waiting.postMessage({ type: 'SKIP_WAITING' }); } catch (e) {}
+    setTimeout(function () { location.reload(); }, 250);
+  });
+
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('sw.js').then(function (reg) {
+      // 已經有一個等著上場的新版本
+      if (reg.waiting && navigator.serviceWorker.controller) showBar(reg.waiting);
+
+      reg.addEventListener('updatefound', function () {
+        var nw = reg.installing;
+        if (!nw) return;
+        nw.addEventListener('statechange', function () {
+          if (nw.state === 'installed' && navigator.serviceWorker.controller) showBar(nw);
+        });
+      });
+
+      // 回到前景時順便檢查有沒有新版
+      document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) { try { reg.update(); } catch (e) {} }
+      });
+      setInterval(function () { try { reg.update(); } catch (e) {} }, 15 * 60 * 1000);
+    }).catch(function () {});
+  });
+})();
+</script>
+</body>
+</html>
