@@ -631,7 +631,6 @@ function renderHero() {
           : `還有 ${list.length - doneN} 件沒做`}${odN ? `　·　<span class="bad">另有 ${odN} 件逾期</span>` : ''}</div>
         <div class="hero-chips">
           <span class="chipx flame">🔥 連續 ${S.streak.current} 天</span>
-          <span class="chipx">🛡️ ${S.streak.shields}</span>
           <span class="chipx">最佳 ${S.streak.best}</span>
           ${syncReady() ? `<button class="chipx sy sy-${sync.status}" id="hero-sync"
             title="點一下立刻同步">${heroSyncLabel()}</button>` : ''}
@@ -730,7 +729,7 @@ function viewToday() {
   const sorted = sortTasks(list, doneIdsOf(list, today), today);
   const rate = list.length ? done.length / list.length : 0;
 
-  const goalCards = S.goals.filter(g => !g.archived && !goalStats(g).done).slice(0, 3);
+  const goalCards = S.goals.filter(g => !g.archived && !goalStats(g).done);
 
   return `
     ${upcomingList()}
