@@ -1147,6 +1147,17 @@ function saveTaskEdit() {
 
 /* ---------- 任務管理 ---------- */
 
+/* 隨手待辦：事情頁直接勾，勾了就算當天完成 */
+function todoRow(t) {
+  const pk = prioOf(t);
+  return `
+    <div class="task p-${pk}" data-toggle="${t.id}" data-tdate="${ymd()}">
+      <div class="check">✓</div>
+      <div class="t-main"><div class="t-name">${esc(t.title)}</div></div>
+      <button class="icobtn del sm" data-del="${t.id}" title="刪除">🗑</button>
+    </div>`;
+}
+
 function viewManage() {
   const active = S.tasks.filter(t => !t.archived);
   const row = (t) => {
@@ -1169,12 +1180,14 @@ function viewManage() {
   };
   const group = (label, arr) => arr.length
     ? `<div class="mgroup"><div class="mg-lab">${label}<span>${arr.length}</span></div>${sortTasks(arr, []).map(row).join('')}</div>` : '';
+  const onceList = active.filter(t => t.schedule.type === 'once');
   const byType = {
-    '🔁 每天':   active.filter(t => t.schedule.type === 'daily'),
-    '📆 每週':   active.filter(t => t.schedule.type === 'weekly'),
-    '📅 指定日': active.filter(t => t.schedule.type === 'once'),
-    '📝 待辦':   active.filter(t => t.schedule.type === 'todo'),
+    '🔁 每天': active.filter(t => t.schedule.type === 'daily'),
+    '📆 每週': active.filter(t => t.schedule.type === 'weekly'),
+    '📝 待辦': active.filter(t => t.schedule.type === 'todo'),
   };
+  const visibleN = active.length - onceList.length;
+  const pendingTodos = active.filter(t => t.schedule.type === 'todo' && !doneEver(t.id));
 
   return `
     <div class="card">
@@ -1219,14 +1232,30 @@ function viewManage() {
     </div>
 
     <div class="card">
-      <h2>我的事情<span class="sub">${active.length} 項</span></h2>
-      ${active.length ? Object.entries(byType).map(([k, v]) => group(k, v)).join('')
+      <h2>📝 隨手待辦<span class="sub">沒有固定時間，但要做</span></h2>
+      <label class="fld"><span>例如：還書</span>
+        <input id="td-title" placeholder="要做的事" maxlength="60"></label>
+      <button class="btn" id="td-add" style="margin-top:8px">加入</button>
+      ${pendingTodos.length
+        ? `<div class="tasklist" style="margin-top:14px">${pendingTodos.map(t => todoRow(t)).join('')}</div>`
+        : `<p class="hint">目前沒有待辦的雜事。打勾後會直接算進當天完成的事項。</p>`}
+    </div>
+
+    <div class="card">
+      <h2>我的事情<span class="sub">${visibleN} 項</span></h2>
+      ${visibleN ? Object.entries(byType).map(([k, v]) => group(k, v)).join('')
         : `<div class="empty"><span class="big">📋</span>還沒有任何事情</div>`}
-      ${active.length ? `
+      ${visibleN ? `
         <button class="btn ghost sm" id="m-resort" style="margin-top:6px">依重要程度重新排序</button>
         <p class="hint">✏️ 可以改名稱、重要程度、排程。改「每週幾」的時候可以選 <b>從今天起</b>，過去的紀錄與成績維持原樣。<br>
         圓點可快速切換重要程度。刪除只會停用它，過去的成績會保留。<br>
         清單順序可以在<b>行事曆或今日清單直接拖曳</b>調整。</p>` : ''}
+      ${onceList.length ? `
+        <details class="mgroup-collapse" style="margin-top:14px">
+          <summary class="mg-lab">📅 指定日期的事件<span>${onceList.length}</span></summary>
+          <p class="hint" style="margin-top:0">不列在上面的清單，成績還是照算；點開才看得到，方便刪除或修改。</p>
+          ${sortTasks(onceList, []).map(row).join('')}
+        </details>` : ''}
     </div>`;
 }
 
@@ -2019,6 +2048,10 @@ function wire() {
   if ($('#f-add')) $('#f-add').addEventListener('click', addTask);
   if ($('#f-title')) $('#f-title').addEventListener('keydown', e => { if (e.key === 'Enter') addTask(); });
 
+  // 隨手待辦
+  if ($('#td-add')) $('#td-add').addEventListener('click', addQuickTodo);
+  if ($('#td-title')) $('#td-title').addEventListener('keydown', e => { if (e.key === 'Enter') addQuickTodo(); });
+
   $$('[data-prioup]').forEach(b => b.addEventListener('click', () => {
     const t = S.tasks.find(x => x.id === b.dataset.prioup);
     if (!t) return;
@@ -2029,7 +2062,8 @@ function wire() {
   if ($('#m-resort')) $('#m-resort').addEventListener('click', () => {
     resortByPriority(); save(); render(); toast('已依重要程度重新排序');
   });
-  $$('[data-del]').forEach(b => b.addEventListener('click', () => {
+  $$('[data-del]').forEach(b => b.addEventListener('click', (e) => {
+    e.stopPropagation();
     if (!confirm('確定刪除？過去的紀錄與成績會保留。')) return;
     const t = S.tasks.find(x => x.id === b.dataset.del);
     if (t) t.archived = true;
@@ -2207,6 +2241,18 @@ function addTask() {
     ? `（${fmtMD(sc.date)}，${daysBetween(ymd(), sc.date) === 0 ? '就是今天' : daysBetween(ymd(), sc.date) + ' 天後'}）`
     : sc.type === 'daily' ? '（每天自動出現）' : '';
   toast(`✅ 已新增「${title}」${extra}`);
+}
+
+function addQuickTodo() {
+  const el = $('#td-title'); if (!el) return;
+  const title = el.value.trim();
+  if (!title) return toast('請輸入名稱');
+  S.tasks.push({
+    id: uid(), title, priority: 'normal', order: nextOrder('normal'),
+    schedule: { type: 'todo' }, createdAt: ymd(), archived: false,
+  });
+  save(); render();
+  toast(`✅ 已加入「${title}」`);
 }
 
 function addGoal() {
