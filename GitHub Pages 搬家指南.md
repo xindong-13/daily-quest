@@ -69,7 +69,7 @@ iPhone 用 **Safari** 打開新網址 → 下方**分享** → **加入主畫面
 
 ## 之後怎麼更新
 
-按兩下 **`GitHub-一鍵更新.bat`**，它會：
+按兩下 **`update.bat`**，它會：
 
 1. 自動把 `sw.js` 的版本號 +1（Kotoba 是 `kotoba-vN`、Echo 是 `echo-vN`、每日任務是 `dq-vN`，三種寫法都認得）
 2. commit 並 push 到 GitHub

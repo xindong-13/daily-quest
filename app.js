@@ -15,10 +15,21 @@ const PRIO = {
   important: { name: '重要', icon: '🟠', color: '#ffb547', rank: 1, desc: '應該要完成' },
   normal:    { name: '一般', icon: '🔵', color: '#6d8cff', rank: 2, desc: '例行事項' },
   light:     { name: '隨手', icon: '⚪', color: '#8d95a8', rank: 3, desc: '有空再做就好' },
+  // rank 接在最後面，才不會讓舊資料的手動排序、成績統計亂掉（見 CLAUDE.md）
+  exam:      { name: '考試', icon: '📕', color: '#ffd60a', rank: 4, desc: '要考試的日子，用特別的顏色提醒你' },
 };
-const PRIO_ORDER = ['must', 'important', 'normal', 'light'];
+const PRIO_ORDER = ['must', 'important', 'normal', 'light', 'exam'];
 
 const WEEK = ['日', '一', '二', '三', '四', '五', '六'];
+
+/* 課表：陽明交大式節次（1~8 節 + A~D 晚間節），週一到週五 */
+const PERIODS = ['1', '2', '3', '4', '5', '6', '7', '8', 'A', 'B', 'C', 'D'];
+const SCHOOL_DAYS = [1, 2, 3, 4, 5]; // WEEK 的索引：一~五
+const COURSE_PALETTE = [
+  '#ff6b6b', '#ffa94d', '#ffd43b', '#69db7c', '#38d9a9',
+  '#4dabf7', '#748ffc', '#9775fa', '#e64980', '#20c997', '#fab005', '#5c7cfa',
+];
+function courseColor(title) { return COURSE_PALETTE[hashStr(title || '') % COURSE_PALETTE.length]; }
 
 const STARTER_TASKS = [
   { title: '喝滿 2000cc 水', priority: 'normal',    schedule: { type: 'daily' } },
@@ -59,6 +70,7 @@ function blankState() {
     profile: { name: '你', createdAt: ymd() },
     tasks: [],
     goals: [],
+    courses: [],      // 課表：{ id, day(1~5=一~五), period('1'~'8'/'A'~'D'), title, location, archived }
     log: {},          // 'YYYY-MM-DD' -> { done:[id], times:{id:'HH:MM'}, perfect }
     dayOrder: {},     // 'YYYY-MM-DD' -> [taskId...]  某天手動排過的順序
     streak: { current: 0, best: 0, lastActive: null, shields: 0, shielded: [] },
@@ -83,6 +95,7 @@ function migrate(o) {
     settings: { ...base.settings, ...(o.settings || {}) },
     goals: Array.isArray(o.goals) ? o.goals : [],
     tasks: Array.isArray(o.tasks) ? o.tasks : [],
+    courses: Array.isArray(o.courses) ? o.courses : [],
     log: o.log && typeof o.log === 'object' ? o.log : {},
     dayOrder: (o.dayOrder && typeof o.dayOrder === 'object') ? o.dayOrder : {},
   };
@@ -590,6 +603,7 @@ function render() {
   if (TAB === 'today')    v.innerHTML = viewToday();
   if (TAB === 'calendar') v.innerHTML = viewCalendar();
   if (TAB === 'manage')   v.innerHTML = viewManage();
+  if (TAB === 'schedule') v.innerHTML = viewSchedule();
   if (TAB === 'stats')    v.innerHTML = viewStats();
   if (TAB === 'goals')    v.innerHTML = viewGoals();
   if (TAB === 'settings') v.innerHTML = viewSettings();
@@ -662,6 +676,7 @@ function taskItem(t, lg, date) {
           ${isDone && lg.times[t.id] ? `<span class="dim">✓ ${lg.times[t.id]}</span>` : ''}
         </div>
       </div>
+      <button class="icobtn del sm" data-del="${t.id}" title="刪除">🗑</button>
     </div>`;
 }
 
@@ -689,6 +704,33 @@ function upcomingList() {
   </div>`;
 }
 
+/* 考試倒數：獨立卡片放在今日最上面，考試當天特別強調，盡量不讓你忘記 */
+function examCard() {
+  const today = ymd();
+  const rows = S.tasks
+    .filter(t => !t.archived && prioOf(t) === 'exam' && !isTaskDone(t, today))
+    .map(t => {
+      const date = t.schedule && t.schedule.type === 'once' ? t.schedule.date : null;
+      const n = date ? daysBetween(today, date) : null;
+      return { t, date, n };
+    })
+    .filter(r => r.n === null || (r.n >= 0 && r.n <= 30))
+    .sort((a, b) => (a.n === null ? 999 : a.n) - (b.n === null ? 999 : b.n));
+  if (!rows.length) return '';
+  const hasToday = rows.some(r => r.n === 0);
+  return `<div class="card exam-card ${hasToday ? 'exam-today' : ''}">
+    <h2>📕 考試提醒<span class="hcount bad">${rows.length}</span></h2>
+    ${rows.map(({ t, date, n }) => `
+      <div class="exam-row ${n === 0 ? 'now' : ''}">
+        <div class="exam-n">${n === 0 ? '🚨 今天' : n === null ? '—' : `${n}<span>天後</span>`}</div>
+        <div class="exam-m">
+          <div class="exam-t">${esc(t.title)}</div>
+          ${date ? `<div class="dim">${fmtMD(date)}（週${WEEK[parseYmd(date).getDay()]}）</div>` : ''}
+        </div>
+      </div>`).join('')}
+  </div>`;
+}
+
 function overdueCard() {
   const rows = overdueTasks();
   if (!rows.length) return '';
@@ -712,6 +754,7 @@ function overdueCard() {
               <span class="dim">📅 ${fmtMD(t.schedule.date)}（週${WEEK[parseYmd(t.schedule.date).getDay()]}）</span>
             </div>
           </div>
+          <button class="icobtn del sm" data-del="${t.id}" title="刪除">🗑</button>
         </div>`;
       }).join('')}
     </div>
@@ -732,6 +775,7 @@ function viewToday() {
   const goalCards = S.goals.filter(g => !g.archived && !goalStats(g).done);
 
   return `
+    ${examCard()}
     ${upcomingList()}
     ${overdueCard()}
     <div class="card">
@@ -862,14 +906,15 @@ function viewMonth() {
     const doneIds = doneIdsOf(list, d);
     const doneN = doneIds.length;
     if (d <= today) { mTotal += list.length; mDone += doneN; }
+    const hasExam = list.some(t => prioOf(t) === 'exam' && !doneIds.includes(t.id));
     const hasCrit = list.some(t => prioOf(t) === 'must');
     const hasImp = list.some(t => prioOf(t) === 'important');
     if (hasCrit) mCrit++;
     const dots = list.slice(0, 6).map(t =>
       `<i style="background:${PRIO[prioOf(t)].color}${doneIds.includes(t.id) ? ';opacity:.28' : ''}"></i>`).join('');
     const allDone = list.length > 0 && doneN === list.length;
-    return `<div class="cal-c ${d === today ? 'today' : ''} ${d === calSel ? 'sel' : ''} ${allDone ? 'ok' : ''}" data-cal="${d}">
-      <div class="cal-n ${hasCrit ? 'crit' : hasImp ? 'imp' : ''}">${+d.slice(8)}</div>
+    return `<div class="cal-c ${d === today ? 'today' : ''} ${d === calSel ? 'sel' : ''} ${allDone ? 'ok' : ''} ${hasExam ? 'has-exam' : ''}" data-cal="${d}">
+      <div class="cal-n ${hasExam ? 'exam' : hasCrit ? 'crit' : hasImp ? 'imp' : ''}">${+d.slice(8)}</div>
       <div class="cal-dots">${dots}${list.length > 6 ? `<span class="more">+${list.length - 6}</span>` : ''}</div>
       ${list.length ? `<div class="cal-cnt">${doneN}/${list.length}</div>` : ''}
     </div>`;
@@ -920,7 +965,7 @@ function openQuickAdd(date) {
   renderModal();
 }
 function closeModal() {
-  qa = null; ge = null; ed = null;
+  qa = null; ge = null; ed = null; cd = null;
   $('#modal').classList.remove('show');
   $('#modal-body').innerHTML = '';
 }
@@ -1256,6 +1301,106 @@ function viewManage() {
           ${sortTasks(onceList, []).map(row).join('')}
         </details>` : ''}
     </div>`;
+}
+
+/* ---------- 課表 ---------- */
+
+function courseAt(day, period) {
+  return S.courses.find(c => !c.archived && c.day === day && c.period === period) || null;
+}
+
+function viewSchedule() {
+  const active = S.courses.filter(c => !c.archived);
+  const rows = PERIODS.map(p => {
+    const cells = SCHOOL_DAYS.map(d => {
+      const c = courseAt(d, p);
+      if (!c) return `<div class="sc-cell empty" data-scadd="${d}|${p}" title="新增課程">＋</div>`;
+      const col = courseColor(c.title);
+      return `<div class="sc-cell filled" data-scedit="${c.id}"
+                   style="background:${col}26;border-color:${col}88" title="${esc(c.title)}">
+        <div class="sc-title" style="color:${col}">${esc(c.title)}</div>
+        ${c.location ? `<div class="sc-loc">📍${esc(c.location)}</div>` : ''}
+      </div>`;
+    }).join('');
+    return `<div class="sc-row"><div class="sc-p">${p}</div>${cells}</div>`;
+  }).join('');
+
+  return `
+    <div class="card">
+      <h2>🏫 我的課表<span class="sub">${active.length} 堂課</span></h2>
+      <div class="sc-grid">
+        <div class="sc-row sc-head"><div class="sc-p"></div>${SCHOOL_DAYS.map(d => `<div class="sc-dh">週${WEEK[d]}</div>`).join('')}</div>
+        ${rows}
+      </div>
+      <p class="hint">📌 節次照陽明交大式排法：1~4 節（早上）、5~8 節（下午）、A~D 節（晚上）。<br>
+      點空格新增課程、點已經有課的格子可以編輯或刪除。同一門課只要打一樣的名字，顏色會自動配成同一種，不用自己選。</p>
+      ${active.length === 0 ? `<div class="empty"><span class="big">🏫</span>還沒有加課，點上面任何一個空格開始</div>` : ''}
+    </div>`;
+}
+
+let cd = null;   // 課表編輯草稿：{ id, day, period, title, location }
+
+function openCourseEdit(day, period, id) {
+  if (id) {
+    const c = S.courses.find(x => x.id === id);
+    if (!c) return;
+    cd = { id: c.id, day: c.day, period: c.period, title: c.title, location: c.location || '' };
+  } else {
+    cd = { id: null, day, period, title: '', location: '' };
+  }
+  renderCourseEdit();
+}
+
+function renderCourseEdit() {
+  if (!cd) return;
+  $('#modal-body').innerHTML = `
+    <div class="mhead">
+      <div><div class="mh-d">${cd.id ? '編輯課程' : '新增課程'}</div>
+           <div class="mh-s">週${WEEK[cd.day]}・第 ${cd.period} 節</div></div>
+      <button class="icobtn" id="cd-x">✕</button>
+    </div>
+    <label class="fld"><span>課程名稱</span>
+      <input id="cd-title" placeholder="例如：微積分" maxlength="40" value="${esc(cd.title)}"></label>
+    <label class="fld" style="margin-top:14px"><span>上課地點</span>
+      <input id="cd-loc" placeholder="例如：工程四館 101" maxlength="40" value="${esc(cd.location)}"></label>
+    <div class="row" style="margin-top:22px">
+      ${cd.id ? `<button class="btn ghost del" id="cd-del">刪除</button>` : `<button class="btn ghost" id="cd-cancel">取消</button>`}
+      <button class="btn" id="cd-save">${cd.id ? '儲存' : '加入'}</button>
+    </div>`;
+  $('#modal').classList.add('show');
+  wireCourseEdit();
+  const i = $('#cd-title');
+  if (i && i.focus) i.focus();
+}
+
+function wireCourseEdit() {
+  $('#cd-x').addEventListener('click', closeModal);
+  if ($('#cd-cancel')) $('#cd-cancel').addEventListener('click', closeModal);
+  if ($('#cd-del')) $('#cd-del').addEventListener('click', () => {
+    if (!confirm('確定刪除這堂課？')) return;
+    const c = S.courses.find(x => x.id === cd.id);
+    if (c) c.archived = true;
+    save(); closeModal(); render();
+  });
+  $('#cd-save').addEventListener('click', saveCourse);
+  $('#cd-title').addEventListener('keydown', e => {
+    if (e.key === 'Enter') saveCourse();
+    if (e.key === 'Escape') closeModal();
+  });
+}
+
+function saveCourse() {
+  const title = (($('#cd-title') || {}).value || '').trim();
+  if (!title) { toast('請先輸入課程名稱'); return; }
+  const location = (($('#cd-loc') || {}).value || '').trim();
+  if (cd.id) {
+    const c = S.courses.find(x => x.id === cd.id);
+    if (c) { c.title = title; c.location = location; }
+  } else {
+    S.courses.push({ id: uid(), day: cd.day, period: cd.period, title, location, archived: false, createdAt: ymd() });
+  }
+  save(); closeModal(); render();
+  toast(`✅ ${title}`);
 }
 
 /* ---------- 統計 ---------- */
@@ -2069,6 +2214,13 @@ function wire() {
     save(); render();
   }));
 
+  // 課表
+  $$('[data-scadd]').forEach(el => el.addEventListener('click', () => {
+    const [day, period] = el.dataset.scadd.split('|');
+    openCourseEdit(+day, period);
+  }));
+  $$('[data-scedit]').forEach(el => el.addEventListener('click', () => openCourseEdit(null, null, el.dataset.scedit)));
+
   // 長期目標
   $$('[data-ginc]').forEach(b => b.addEventListener('click', () => openGoalEntry(b.dataset.ginc)));
   $$('[data-glog]').forEach(b => b.addEventListener('click', () => openGoalLog(b.dataset.glog)));
@@ -2496,6 +2648,17 @@ function mergeStates(local, remote) {
   }
   out.goals = Array.from(gMap.values());
 
+  // 課表：以 id 聯集，刪除一樣用 archived 標記，不會被合併救回來
+  const cMap = new Map();
+  for (const c of (secondary.courses || [])) cMap.set(c.id, c);
+  for (const c of (primary.courses || [])) {
+    const old = cMap.get(c.id);
+    const n = clone(c);
+    if (old && old.archived && !n.archived) n.archived = true;
+    cMap.set(c.id, n);
+  }
+  out.courses = Array.from(cMap.values());
+
   // 每日勾選：一天一天比，取那天比較晚被改動的版本
   const log = {};
   const days = new Set([...Object.keys(local.log || {}), ...Object.keys(remote.log || {})]);
@@ -2723,11 +2886,13 @@ function fireReminder() {
   const today = ymd();
   const rest = todaysTasks().filter(t => !isTaskDone(t, today));
   const od = overdueTasks().filter(t => !isTaskDone(t, today));
+  const exam = rest.filter(t => prioOf(t) === 'exam');
   const crit = rest.filter(t => prioOf(t) === 'must');
   const imp  = rest.filter(t => prioOf(t) === 'important');
   const odTail = od.length ? `　另有 ${od.length} 件逾期：${od.map(t => t.title).join('、')}` : '';
   let msg;
-  if (crit.length)      msg = `🔴 今天有「必做」還沒完成：${crit.map(t => t.title).join('、')}${odTail}`;
+  if (exam.length)       msg = `📕🚨 今天有考試：${exam.map(t => t.title).join('、')}！`;
+  else if (crit.length)      msg = `🔴 今天有「必做」還沒完成：${crit.map(t => t.title).join('、')}${odTail}`;
   else if (od.length)   msg = `⚠️ 有 ${od.length} 件逾期還沒處理：${od.map(t => t.title).join('、')}`;
   else if (imp.length)  msg = `🟠 別忘了：${imp.map(t => t.title).join('、')}（今天還有 ${rest.length} 件）`;
   else if (rest.length) msg = `還有 ${rest.length} 件事，連續 ${S.streak.current} 天別斷在今天 🔥`;
@@ -2824,7 +2989,8 @@ if (typeof module !== 'undefined' && module.exports) {
     taskReport, overallReport, doneEver, doneOn, dayLog,
     maintainStreak, bumpStreak,
     toggleTask, goalProgress, goalStats, addGoalEntry, thisWeekStart,
-    views: { viewToday, viewCalendar, viewManage, viewStats, viewGoals, viewSettings },
+    views: { viewToday, viewCalendar, viewManage, viewSchedule, viewStats, viewGoals, viewSettings },
+    courseAt, courseColor, PERIODS, SCHOOL_DAYS,
     viewWeek, viewMonth, goalCard, goalChart, lineChart,
     setState: (s) => { S = s; }, getState: () => S,
     stateIsEmpty, syncStatusHtml, adoptRemote, openTextBackup, openTextRestore, openSqlHelp,

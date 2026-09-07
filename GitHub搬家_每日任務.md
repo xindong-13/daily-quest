@@ -14,7 +14,7 @@
 
 ```
 GitHub-第一次設定.bat     ← 只跑一次
-GitHub-一鍵更新.bat       ← 以後每次更新都用這個
+update.bat               ← 以後每次更新都用這個
 GitHub-用權杖登入.bat     ← 登入失敗時的備援
 bump-version.ps1         ← 自動把版本號 +1
 .gitignore  .nojekyll    ← 排除個人資料 / 讓 Pages 直接吃靜態檔
@@ -133,7 +133,7 @@ https://你的帳號.github.io/daily-quest/
 
 # 之後怎麼更新
 
-**雙擊 `GitHub-一鍵更新.bat`**，它會：
+**雙擊 `update.bat`**，它會：
 
 1. 自動把 `sw.js` 和 `index.html` 的版本號 `dq-vN` → `dq-vN+1`
 2. commit 並 push

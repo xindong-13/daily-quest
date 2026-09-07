@@ -2,7 +2,7 @@
    讓 App 加到手機主畫面後可以離線使用。
    改過程式之後，把下面的版本號 +1，手機下次開啟就會自動更新。 */
 
-const VERSION = 'dq-v17';
+const VERSION = 'dq-v19';
 const ASSETS = [
   './',
   './index.html',

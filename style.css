@@ -14,6 +14,7 @@
   --good:     #3ddc97;
   --warn:     #ffb547;
   --bad:      #ff5f79;
+  --exam:     #ffd60a;
 
   --r:    18px;
   --r-sm: 12px;
@@ -178,12 +179,33 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 18px 0; }
 .task.p-normal    { border-left: 3px solid rgba(109,140,255,.55); }
 .task.p-light     { border-left: 3px solid rgba(141,149,168,.4); }
 .task.p-light .t-name { color: #cbd1dc; }
+.task.p-exam {
+  border-left: 3px solid var(--exam);
+  background: repeating-linear-gradient(135deg, rgba(255,214,10,.16) 0 10px, rgba(255,214,10,.05) 10px 20px);
+}
 .task.done.p-must { background: var(--elev); }
+.task.done.p-exam { background: var(--elev); }
 /* 已完成的一律變淡，寫在最後才不會被上面的重要程度樣式蓋掉 */
 .task.done { opacity: .45; }
 .task.done .t-name { color: inherit; }
 .task.overdue { animation: pulseRed 2.6s ease-in-out infinite; }
 @keyframes pulseRed { 0%,100% { box-shadow: 0 0 0 0 rgba(255,95,121,0) } 50% { box-shadow: 0 0 0 3px rgba(255,95,121,.14) } }
+
+/* ---------- 考試提醒 ---------- */
+.exam-card { border-color: rgba(255,214,10,.4); }
+.exam-row { display: flex; align-items: center; gap: 13px; padding: 10px 2px; border-bottom: 1px solid var(--line); }
+.exam-row:last-child { border-bottom: none; }
+.exam-n {
+  flex: 0 0 60px; text-align: center; font-weight: 800; font-size: 17px; color: var(--exam);
+}
+.exam-n span { display: block; font-size: 10px; font-weight: 700; color: var(--dim); }
+.exam-row.now .exam-n {
+  color: #1b1405; background: var(--exam); border-radius: 10px; padding: 8px 2px; font-size: 13px;
+  animation: examPulse 1.4s ease-in-out infinite;
+}
+@keyframes examPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255,214,10,.55) } 50% { box-shadow: 0 0 0 7px rgba(255,214,10,0) } }
+.exam-t { font-weight: 800; font-size: 15px; }
+.exam-card.exam-today { box-shadow: 0 0 0 2px var(--exam) inset; }
 
 /* ---------- 按鈕 ---------- */
 .btn {
@@ -219,6 +241,7 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 18px 0; }
 .chip.pr-important.on { background: var(--warn);   border-color: var(--warn);   color: #1b1405; }
 .chip.pr-normal.on    { background: var(--accent); border-color: var(--accent); color: #fff; }
 .chip.pr-light.on     { background: var(--elev2);  border-color: var(--line2);  color: var(--text); }
+.chip.pr-exam.on      { background: var(--exam);   border-color: var(--exam);   color: #1b1405; }
 .chip.day { min-width: 42px; text-align: center; padding: 8px 0; }
 
 /* ---------- 切換列 ---------- */
@@ -310,9 +333,14 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 18px 0; }
 .cal-c.sel { background: var(--accent); border-color: var(--accent); }
 .cal-c.sel .cal-n, .cal-c.sel .cal-cnt { color: #fff; }
 .cal-c.ok { background: rgba(61,220,151,.09); border-color: rgba(61,220,151,.26); }
+.cal-c.has-exam {
+  border-color: var(--exam);
+  background: repeating-linear-gradient(45deg, rgba(255,214,10,.18) 0 6px, rgba(255,214,10,.05) 6px 12px);
+}
 .cal-n { font-size: 13px; font-weight: 700; line-height: 1.2; }
 .cal-n.imp { color: var(--warn); }
 .cal-n.crit { color: var(--bad); font-weight: 800; }
+.cal-n.exam { color: #1b1405; background: var(--exam); border-radius: 6px; padding: 0 5px; font-weight: 800; }
 .cal-dots { display: flex; flex-wrap: wrap; gap: 2px; justify-content: center; align-items: center; min-height: 8px; }
 .cal-dots i { width: 5px; height: 5px; border-radius: 50%; display: block; }
 .cal-dots .more { font-size: 8.5px; color: var(--dim); font-weight: 700; }
@@ -335,11 +363,29 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 18px 0; }
 .mrow.p-must      { border-left: 3px solid var(--bad); }
 .mrow.p-normal    { border-left: 3px solid rgba(109,140,255,.5); }
 .mrow.p-light     { border-left: 3px solid rgba(141,149,168,.35); }
+.mrow.p-exam      { border-left: 3px solid var(--exam); }
 
 .mgroup-collapse summary { cursor: pointer; list-style: none; }
 .mgroup-collapse summary::-webkit-details-marker { display: none; }
 .mgroup-collapse summary::before { content: '▸'; display: inline-block; margin-right: 6px; transition: transform .15s; }
 .mgroup-collapse[open] summary::before { transform: rotate(90deg); }
+
+/* ---------- 課表 ---------- */
+.sc-grid { display: flex; flex-direction: column; gap: 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.sc-row { display: grid; grid-template-columns: 30px repeat(5, minmax(56px, 1fr)); gap: 4px; min-width: 400px; }
+.sc-row.sc-head { font-size: 11px; color: var(--dim); font-weight: 800; }
+.sc-p { display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; color: var(--dim); }
+.sc-dh { text-align: center; padding: 2px 0 6px; }
+.sc-cell {
+  min-height: 52px; border-radius: 9px; border: 1px solid var(--line); background: var(--elev);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 4px 3px; cursor: pointer; transition: var(--tr); text-align: center;
+}
+.sc-cell.empty { color: var(--dim); font-size: 16px; }
+.sc-cell.empty:hover { background: var(--elev2); }
+.sc-cell.filled:active { transform: scale(.96); }
+.sc-title { font-size: 11px; font-weight: 800; line-height: 1.25; word-break: break-word; }
+.sc-loc { font-size: 9px; color: var(--dim); margin-top: 2px; word-break: break-word; }
 
 /* ---------- 統計 ---------- */
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(88px, 1fr)); gap: 9px; }
