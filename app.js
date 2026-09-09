@@ -451,7 +451,7 @@ function toggleTask(id, ev, date) {
     if (dd) day = dd;
   }
   const isToday = day === ymd();
-  if (day > ymd()) { toast('還沒到那天，不能先勾 🙂'); return; }
+  const isFuture = day > ymd();
   const lg = touchDay(day);
   const idx = lg.done.indexOf(id);
 
@@ -465,7 +465,7 @@ function toggleTask(id, ev, date) {
     const hh = String(now.getHours()).padStart(2, '0');
     const mm = String(now.getMinutes()).padStart(2, '0');
     lg.done.push(id);
-    lg.times[id] = isToday ? `${hh}:${mm}` : '補記';
+    lg.times[id] = isToday ? `${hh}:${mm}` : (isFuture ? '提前完成' : '補記');
     S.stats.totalDone++;
 
     if (isToday) bumpStreak();
@@ -475,6 +475,8 @@ function toggleTask(id, ev, date) {
     const sc0 = t.schedule || {};
     if (sc0.type === 'once' && sc0.date < ymd()) {
       toast(`✅ 完成「${t.title}」　（原本排在 ${fmtMD(sc0.date)}）`);
+    } else if (isFuture) {
+      toast(`✅ 提前完成「${t.title}」　（排在 ${fmtMD(day)}）`);
     }
 
     const list = todaysTasks(day);
@@ -763,13 +765,26 @@ function overdueCard() {
   </div>`;
 }
 
+/* 隨手待辦：不算進「當天任務」，獨立一區放在「今日接下來」下面、「當天任務」上面 */
+function quickTodoCard(todos, lg, today) {
+  if (!todos.length) return '';
+  const doneIds = doneIdsOf(todos, today);
+  const sorted = sortTasks(todos, doneIds, today);
+  return `<div class="card">
+    <h2>📝 隨手待辦<span class="hcount">${doneIds.length}<em>/${todos.length}</em></span></h2>
+    <div class="tasklist">${sorted.map(t => taskItem(t, lg, today)).join('')}</div>
+  </div>`;
+}
+
 function viewToday() {
   const today = ymd();
   const lg = dayLog(today);
   const list = todaysTasks(today);
+  const todos = list.filter(t => (t.schedule || {}).type === 'todo');
+  const mainList = list.filter(t => (t.schedule || {}).type !== 'todo');
   const done = list.filter(t => isTaskDone(t, today));
   const dt = parseYmd(today);
-  const sorted = sortTasks(list, doneIdsOf(list, today), today);
+  const sorted = sortTasks(mainList, doneIdsOf(mainList, today), today);
   const rate = list.length ? done.length / list.length : 0;
 
   const goalCards = S.goals.filter(g => !g.archived && !goalStats(g).done);
@@ -777,12 +792,13 @@ function viewToday() {
   return `
     ${examCard()}
     ${upcomingList()}
+    ${quickTodoCard(todos, lg, today)}
     ${overdueCard()}
     <div class="card">
       <h2>${dt.getMonth() + 1} 月 ${dt.getDate()} 日<span class="sub">週${WEEK[dt.getDay()]}</span>
         <span class="hcount">${done.length}<em>/${list.length}</em></span></h2>
       <div class="topbar"><i style="width:${(rate * 100).toFixed(0)}%"></i></div>
-      ${list.length === 0
+      ${mainList.length === 0
         ? `<div class="empty"><span class="big">🌤</span>今天沒有排事情<br><span class="dim">到「行事曆」雙擊某天就能新增</span></div>`
         : `<div class="tasklist">${sorted.map(t => taskItem(t, lg)).join('')}</div>`}
     </div>
@@ -839,19 +855,19 @@ function viewWeek() {
     const doneN = doneIds.length;
     if (d <= today) { wTotal += list.length; wDone += doneN; }
     const dt = parseYmd(d);
-    const future = d > today;
     const allDone = list.length > 0 && doneN === list.length;
 
     const chip = (t) => {
       const pk = prioOf(t), p = PRIO[pk];
       const isDone = doneIds.includes(t.id);
-      return `<div class="wt ${isDone ? 'done' : ''} ${future ? 'lock' : ''} p-${pk}"
+      return `<div class="wt ${isDone ? 'done' : ''} p-${pk}"
                    style="border-left-color:${p.color}"
                    data-drag="${t.id}" data-dragdate="${d}"
-                   ${future ? '' : `data-wtoggle="${t.id}" data-wdate="${d}"`}
+                   data-wtoggle="${t.id}" data-wdate="${d}"
                    title="${esc(t.title)}">
         <span class="wt-c">${isDone ? '✓' : '○'}</span>
         <span class="wt-n">${esc(t.title)}</span>
+        <button class="wt-del" data-del="${t.id}" title="刪除">✕</button>
       </div>`;
     };
 

@@ -309,14 +309,17 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 18px 0; }
 }
 .wt:hover { background: rgba(255,255,255,.11); }
 .wt.done .wt-n { text-decoration: line-through; }
-.wt.lock { cursor: default; opacity: .72; }
-.wt.lock:hover { background: rgba(255,255,255,.05); }
-.wt.done { opacity: .4; }          /* 已完成優先，放在 lock 之後才不會被蓋掉 */
+.wt.done { opacity: .4; }
 .wt-c { flex: 0 0 auto; font-size: 10px; color: var(--dim); }
 .wt.done .wt-c { color: var(--good); }
 .wt-n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .wt.p-must  { background: rgba(255,95,121,.13); }
 .wt.p-important { background: rgba(255,181,71,.10); }
+.wt-del {
+  flex: 0 0 auto; width: 15px; height: 15px; border-radius: 5px;
+  display: grid; place-items: center; font-size: 9px; color: var(--dim); opacity: .55;
+}
+.wt-del:hover { background: rgba(255,95,121,.18); color: var(--bad); opacity: 1; }
 
 /* ---------- 月檢視 ---------- */
 .cal-wk { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 5px; }
