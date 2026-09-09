@@ -265,6 +265,10 @@ function isTaskDone(t, date) {
    行事曆（週／月）與成績統計都用這個。 */
 function dayTasks(d) { return S.tasks.filter(t => isPlanned(t, d)); }
 
+/* 行事曆（週／月）專用：不含隨手待辦——那些只在「今日」自己一區顯示，
+   不算是排定的行程，成績統計仍照 dayTasks／isPlanned 正常計算，不受影響。 */
+function calendarTasks(d) { return dayTasks(d).filter(t => (t.schedule || {}).type !== 'todo'); }
+
 /* 已經過期又還沒完成的「指定日期」事項。
    只會出現在「今日」分頁的獨立提醒區，不會混進行事曆的今天。 */
 function overdueTasks() {
@@ -854,7 +858,7 @@ function viewWeek() {
   let wTotal = 0, wDone = 0;
 
   const col = (d) => {
-    const raw = dayTasks(d);
+    const raw = calendarTasks(d);
     const doneIds = doneIdsOf(raw, d);
     const list = sortTasks(raw, doneIds, d);
     const doneN = doneIds.length;
@@ -923,7 +927,7 @@ function viewMonth() {
 
   const cell = (d) => {
     if (!d) return `<div class="cal-c empty"></div>`;
-    const list = dayTasks(d);
+    const list = calendarTasks(d);
     const doneIds = doneIdsOf(list, d);
     const doneN = doneIds.length;
     if (d <= today) { mTotal += list.length; mDone += doneN; }
@@ -943,7 +947,7 @@ function viewMonth() {
 
   let detail = '';
   if (calSel) {
-    const list = sortTasks(dayTasks(calSel), doneIdsOf(dayTasks(calSel), calSel), calSel);
+    const list = sortTasks(calendarTasks(calSel), doneIdsOf(calendarTasks(calSel), calSel), calSel);
     const dt = parseYmd(calSel);
     const lg = S.log[calSel] || { done: [], times: {} };
     detail = `<div class="card">
@@ -3076,7 +3080,7 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     ymd, parseYmd, addDays, daysBetween, fmtMD, hashStr, clamp,
     PRIO, PRIO_ORDER, WEEK, blankState, migrate, uid,
-    isPlanned, dayTasks, todaysTasks, overdueDays, daysUntil, prioOf, sortTasks,
+    isPlanned, dayTasks, calendarTasks, todaysTasks, overdueDays, daysUntil, prioOf, sortTasks,
     isTaskDone, doneIdsOf, overdueTasks, overdueCard,
     scheduleAt, changeScheduleFrom, changeScheduleAll, schedText, scEqual,
     orderOf, nextOrder, resortByPriority, reorderWithin, moveTaskToDay,
