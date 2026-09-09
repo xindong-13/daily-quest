@@ -29,7 +29,10 @@ const COURSE_PALETTE = [
   '#ff6b6b', '#ffa94d', '#ffd43b', '#69db7c', '#38d9a9',
   '#4dabf7', '#748ffc', '#9775fa', '#e64980', '#20c997', '#fab005', '#5c7cfa',
 ];
-function courseColor(title) { return COURSE_PALETTE[hashStr(title || '') % COURSE_PALETTE.length]; }
+function courseColor(title) {
+  const custom = S && S.courseColors && S.courseColors[title];
+  return custom || COURSE_PALETTE[hashStr(title || '') % COURSE_PALETTE.length];
+}
 
 const STARTER_TASKS = [
   { title: '喝滿 2000cc 水', priority: 'normal',    schedule: { type: 'daily' } },
@@ -71,6 +74,7 @@ function blankState() {
     tasks: [],
     goals: [],
     courses: [],      // 課表：{ id, day(1~5=一~五), period('1'~'8'/'A'~'D'), title, location, archived }
+    courseColors: {}, // 課表：{ 課程名稱: '#hex' }，使用者自己挑的顏色，優先於自動配色
     log: {},          // 'YYYY-MM-DD' -> { done:[id], times:{id:'HH:MM'}, perfect }
     dayOrder: {},     // 'YYYY-MM-DD' -> [taskId...]  某天手動排過的順序
     streak: { current: 0, best: 0, lastActive: null, shields: 0, shielded: [] },
@@ -96,6 +100,7 @@ function migrate(o) {
     goals: Array.isArray(o.goals) ? o.goals : [],
     tasks: Array.isArray(o.tasks) ? o.tasks : [],
     courses: Array.isArray(o.courses) ? o.courses : [],
+    courseColors: (o.courseColors && typeof o.courseColors === 'object') ? o.courseColors : {},
     log: o.log && typeof o.log === 'object' ? o.log : {},
     dayOrder: (o.dayOrder && typeof o.dayOrder === 'object') ? o.dayOrder : {},
   };
@@ -1325,6 +1330,17 @@ function courseAt(day, period) {
   return S.courses.find(c => !c.archived && c.day === day && c.period === period) || null;
 }
 
+/* 目前排課裡不重複的課程名稱（給「已經有的課程」快速選單用），
+   同一個名稱取第一筆代表地點就好 */
+function courseTitleOptions() {
+  const map = new Map();
+  for (const c of S.courses) {
+    if (c.archived || map.has(c.title)) continue;
+    map.set(c.title, c);
+  }
+  return Array.from(map.values());
+}
+
 function viewSchedule() {
   const active = S.courses.filter(c => !c.archived);
   const rows = PERIODS.map(p => {
@@ -1349,40 +1365,75 @@ function viewSchedule() {
         ${rows}
       </div>
       <p class="hint">📌 節次照陽明交大式排法：1~4 節（早上）、5~8 節（下午）、A~D 節（晚上）。<br>
-      點空格新增課程、點已經有課的格子可以編輯或刪除。同一門課只要打一樣的名字，顏色會自動配成同一種，不用自己選。</p>
+      點空格新增課程、點已經有課的格子可以編輯或刪除。同一門課只要打一樣的名字，顏色會自動配成同一種，也可以自己在編輯畫面挑顏色。<br>
+      一堂課有好幾個節次的話，第一次打完後，編輯畫面裡可以直接「複製到這裡」加其他節次，或是新增時點「已經有的課程」帶入，不用每次重打。</p>
       ${active.length === 0 ? `<div class="empty"><span class="big">🏫</span>還沒有加課，點上面任何一個空格開始</div>` : ''}
     </div>`;
 }
 
-let cd = null;   // 課表編輯草稿：{ id, day, period, title, location }
+let cd = null;   // 課表編輯草稿：{ id, day, period, title, location, color }
 
 function openCourseEdit(day, period, id) {
   if (id) {
     const c = S.courses.find(x => x.id === id);
     if (!c) return;
-    cd = { id: c.id, day: c.day, period: c.period, title: c.title, location: c.location || '' };
+    cd = { id: c.id, day: c.day, period: c.period, title: c.title, location: c.location || '', color: S.courseColors[c.title] || null };
   } else {
-    cd = { id: null, day, period, title: '', location: '' };
+    cd = { id: null, day, period, title: '', location: '', color: null };
   }
   renderCourseEdit();
 }
 
+/* 挑色／輸入到一半時，先把畫面上已經打的字存回草稿，重畫才不會被清空 */
+function keepCourseDraft() {
+  const ti = $('#cd-title'); if (ti) cd.title = ti.value;
+  const lo = $('#cd-loc'); if (lo) cd.location = lo.value;
+}
+
 function renderCourseEdit() {
   if (!cd) return;
+  const activeColor = cd.color || courseColor(cd.title);
+  const picks = !cd.id ? courseTitleOptions() : [];
+  const emptySlots = [];
+  for (const d of SCHOOL_DAYS) for (const p of PERIODS) {
+    if (d === cd.day && p === cd.period) continue;
+    if (!courseAt(d, p)) emptySlots.push({ d, p });
+  }
+
   $('#modal-body').innerHTML = `
     <div class="mhead">
       <div><div class="mh-d">${cd.id ? '編輯課程' : '新增課程'}</div>
            <div class="mh-s">週${WEEK[cd.day]}・第 ${cd.period} 節</div></div>
       <button class="icobtn" id="cd-x">✕</button>
     </div>
-    <label class="fld"><span>課程名稱</span>
+    ${picks.length ? `
+    <label class="fld"><span>已經有的課程<span class="dim" style="font-weight:400"> · 點一下直接帶入</span></span></label>
+    <div class="chips">
+      ${picks.map(c => `<button class="chip" style="border-color:${courseColor(c.title)}88;color:${courseColor(c.title)}"
+            data-cdpick="${esc(c.title)}" data-cdpickloc="${esc(c.location || '')}">${esc(c.title)}</button>`).join('')}
+    </div>` : ''}
+    <label class="fld" style="margin-top:14px"><span>課程名稱</span>
       <input id="cd-title" placeholder="例如：微積分" maxlength="40" value="${esc(cd.title)}"></label>
     <label class="fld" style="margin-top:14px"><span>上課地點</span>
       <input id="cd-loc" placeholder="例如：工程四館 101" maxlength="40" value="${esc(cd.location)}"></label>
+    <label class="fld" style="margin-top:14px"><span>顏色<span class="dim" style="font-weight:400"> · 不選就用自動配色</span></span></label>
+    <div class="sw-row">
+      ${COURSE_PALETTE.map(hex => `<button class="sw ${activeColor === hex ? 'on' : ''}" style="background:${hex}" data-cdcolor="${hex}"></button>`).join('')}
+    </div>
     <div class="row" style="margin-top:22px">
       ${cd.id ? `<button class="btn ghost del" id="cd-del">刪除</button>` : `<button class="btn ghost" id="cd-cancel">取消</button>`}
       <button class="btn" id="cd-save">${cd.id ? '儲存' : '加入'}</button>
-    </div>`;
+    </div>
+    ${cd.id && emptySlots.length ? `
+    <hr class="sep">
+    <label class="fld"><span>🔁 這堂課還有別的節次？</span></label>
+    <div class="row">
+      <select id="cd-dup-slot">
+        ${emptySlots.map(({ d, p }) => `<option value="${d}|${p}">週${WEEK[d]}・第 ${p} 節</option>`).join('')}
+      </select>
+      <button class="btn ghost sm" id="cd-dup-add">複製到這裡</button>
+    </div>
+    <p class="hint" style="margin-top:6px">選一個空的節次，會直接用一樣的名稱、地點、顏色加一堂，不用重打。</p>` : ''}`;
   $('#modal').classList.add('show');
   wireCourseEdit();
   const i = $('#cd-title');
@@ -1397,6 +1448,30 @@ function wireCourseEdit() {
     const c = S.courses.find(x => x.id === cd.id);
     if (c) c.archived = true;
     save(); closeModal(); render();
+  });
+  $$('[data-cdpick]').forEach(b => b.addEventListener('click', () => {
+    cd.title = b.dataset.cdpick;
+    cd.location = b.dataset.cdpickloc || '';
+    cd.color = S.courseColors[cd.title] || null;
+    renderCourseEdit();
+  }));
+  $$('[data-cdcolor]').forEach(b => b.addEventListener('click', () => {
+    keepCourseDraft();
+    cd.color = b.dataset.cdcolor;
+    renderCourseEdit();
+  }));
+  if ($('#cd-dup-add')) $('#cd-dup-add').addEventListener('click', () => {
+    keepCourseDraft();
+    if (!cd.title.trim()) { toast('請先輸入課程名稱'); return; }
+    const sel = $('#cd-dup-slot');
+    const [d, p] = sel.value.split('|');
+    const day = +d, period = p;
+    if (courseAt(day, period)) { toast('這個節次已經有課了'); return; }
+    S.courses.push({ id: uid(), day, period, title: cd.title.trim(), location: cd.location.trim(), archived: false, createdAt: ymd() });
+    if (cd.color) S.courseColors[cd.title.trim()] = cd.color;
+    save(); render();
+    toast(`✅ 已加到 週${WEEK[day]}・第 ${period} 節`);
+    renderCourseEdit();
   });
   $('#cd-save').addEventListener('click', saveCourse);
   $('#cd-title').addEventListener('keydown', e => {
@@ -1415,6 +1490,7 @@ function saveCourse() {
   } else {
     S.courses.push({ id: uid(), day: cd.day, period: cd.period, title, location, archived: false, createdAt: ymd() });
   }
+  if (cd.color) S.courseColors[title] = cd.color;
   save(); closeModal(); render();
   toast(`✅ ${title}`);
 }
@@ -2674,6 +2750,9 @@ function mergeStates(local, remote) {
     cMap.set(c.id, n);
   }
   out.courses = Array.from(cMap.values());
+
+  // 課程顏色：聯集，同一個名稱兩邊都設過的話取主要那份
+  out.courseColors = { ...(secondary.courseColors || {}), ...(primary.courseColors || {}) };
 
   // 每日勾選：一天一天比，取那天比較晚被改動的版本
   const log = {};

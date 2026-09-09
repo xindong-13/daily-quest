@@ -244,6 +244,14 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 18px 0; }
 .chip.pr-exam.on      { background: var(--exam);   border-color: var(--exam);   color: #1b1405; }
 .chip.day { min-width: 42px; text-align: center; padding: 8px 0; }
 
+.sw-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.sw {
+  width: 28px; height: 28px; border-radius: 50%; flex: 0 0 auto;
+  border: 2px solid transparent; transition: var(--tr); cursor: pointer;
+}
+.sw:hover { transform: scale(1.08); }
+.sw.on { border-color: var(--text); box-shadow: 0 0 0 2px var(--bg); }
+
 /* ---------- 切換列 ---------- */
 .modebar {
   display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--line);
