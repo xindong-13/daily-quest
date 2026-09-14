@@ -115,7 +115,6 @@ function migrate(o) {
     if (t.priority === 'critical') t.priority = 'must';
     if (!PRIO[t.priority]) t.priority = 'normal';
     delete t.attr; delete t.difficulty;
-    if (typeof t.subject !== 'string') t.subject = '';
     if (typeof t.order !== 'number') {
       t.order = PRIO[t.priority].rank * 100000 + (out.tasks.indexOf(t) + 1) * 10;
     }
@@ -603,33 +602,8 @@ let weekStart = null;
 let calYM = null;
 let calSel = null;
 let statRange = 'month';           // week | month | all
-let subjFilter = '';               // 科目篩選：空字串＝全部
-const draft = { title: '', priority: 'normal', schedType: 'daily', days: [], date: ymd(), subject: '' };
+const draft = { title: '', priority: 'normal', schedType: 'daily', days: [], date: ymd() };
 const gdraft = { title: '', target: 20, unit: '本', deadline: '' };
-
-/* 科目（考試複習用）：任務上一個選填的文字標籤，跟課表共用同一套配色 hash，
-   同一個名字在「課表」跟「事情」裡顏色會一致，但兩邊資料互不綁定 */
-function subjectTag(t) {
-  if (!t.subject) return '';
-  const col = courseColor(t.subject);
-  return `<span class="tag" style="color:${col};border-color:${col}55">📘 ${esc(t.subject)}</span>`;
-}
-function distinctSubjects() {
-  const set = new Set();
-  S.tasks.forEach(t => { if (!t.archived && t.subject) set.add(t.subject); });
-  return Array.from(set).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
-}
-function bySubject(list) {
-  return subjFilter ? list.filter(t => (t.subject || '') === subjFilter) : list;
-}
-function subjectFilterBar() {
-  const subs = distinctSubjects();
-  if (!subs.length) return '';
-  return `<div class="chips" style="margin-bottom:12px">
-    <button class="chip ${!subjFilter ? 'on' : ''}" data-subjf="">全部科目</button>
-    ${subs.map(s => `<button class="chip ${subjFilter === s ? 'on' : ''}" data-subjf="${esc(s)}">📘 ${esc(s)}</button>`).join('')}
-  </div>`;
-}
 
 function thisWeekStart(d = ymd()) { return addDays(d, -parseYmd(d).getDay()); }
 
@@ -707,7 +681,6 @@ function taskItem(t, lg, date) {
         <div class="t-meta">
           ${od > 0 && !isDone ? `<span class="tag od">逾期 ${od} 天</span>` : ''}
           <span class="tag" style="color:${p.color};border-color:${p.color}55">${p.icon} ${p.name}</span>
-          ${subjectTag(t)}
           ${left === 0 && t.schedule.type === 'once'
             ? `<span class="tag" style="color:#ffb547;border-color:#ffb54755">📅 就是今天</span>`
             : schedLabel(t)}
@@ -735,7 +708,7 @@ function upcomingList() {
         <div class="up-m">
           <div class="up-t">${esc(t.title)}</div>
           <div class="t-meta"><span class="dim">${fmtMD(t.schedule.date)}（週${WEEK[parseYmd(t.schedule.date).getDay()]}）</span>
-          <span class="tag" style="color:${p.color};border-color:${p.color}55">${p.icon} ${p.name}</span>${subjectTag(t)}</div>
+          <span class="tag" style="color:${p.color};border-color:${p.color}55">${p.icon} ${p.name}</span></div>
         </div>
       </div>`;
     }).join('')}
@@ -821,7 +794,6 @@ function viewToday() {
   const done = list.filter(t => isTaskDone(t, today));
   const dt = parseYmd(today);
   const sorted = sortTasks(mainList, doneIdsOf(mainList, today), today);
-  const filteredSorted = bySubject(sorted);
   const rate = list.length ? done.length / list.length : 0;
 
   const goalCards = S.goals.filter(g => !g.archived && !goalStats(g).done);
@@ -837,10 +809,7 @@ function viewToday() {
       <div class="topbar"><i style="width:${(rate * 100).toFixed(0)}%"></i></div>
       ${mainList.length === 0
         ? `<div class="empty"><span class="big">🌤</span>今天沒有排事情<br><span class="dim">到「行事曆」雙擊某天就能新增</span></div>`
-        : `${subjectFilterBar()}
-           ${filteredSorted.length
-             ? `<div class="tasklist">${filteredSorted.map(t => taskItem(t, lg)).join('')}</div>`
-             : `<div class="empty"><span class="big">📘</span>今天「${esc(subjFilter)}」沒有排事情</div>`}`}
+        : `<div class="tasklist">${sorted.map(t => taskItem(t, lg)).join('')}</div>`}
     </div>
 
     ${goalCards.length ? `<div class="card">
@@ -1017,7 +986,7 @@ function viewMonth() {
 let qa = null;
 
 function openQuickAdd(date) {
-  qa = { date, title: '', priority: 'normal', repeat: 'once', subject: '' };
+  qa = { date, title: '', priority: 'normal', repeat: 'once' };
   renderModal();
 }
 function closeModal() {
@@ -1056,9 +1025,6 @@ function renderModal() {
         `<button class="chip ${qa.repeat === k ? 'on' : ''}" data-qr="${k}">${v.t}</button>`).join('')}
     </div>
     <p class="hint" style="margin-top:7px">${REP[qa.repeat].d}</p>
-    <label class="fld" style="margin-top:14px"><span>科目（選填）</span>
-      <input id="qa-subject" list="subj-list-qa" placeholder="例如：微積分" maxlength="20" value="${esc(qa.subject || '')}"></label>
-    <datalist id="subj-list-qa">${distinctSubjects().map(s => `<option value="${esc(s)}">`).join('')}</datalist>
     <div class="row" style="margin-top:22px">
       <button class="btn ghost" id="qa-cancel">取消</button>
       <button class="btn" id="qa-save">加入</button>
@@ -1070,10 +1036,7 @@ function renderModal() {
 }
 
 function wireQuickAdd() {
-  const keep = () => {
-    const i = $('#qa-title'); if (i && typeof i.value === 'string') qa.title = i.value;
-    const s = $('#qa-subject'); if (s && typeof s.value === 'string') qa.subject = s.value;
-  };
+  const keep = () => { const i = $('#qa-title'); if (i && typeof i.value === 'string') qa.title = i.value; };
   $$('#qa-prio .chip').forEach(b => b.addEventListener('click', () => { keep(); qa.priority = b.dataset.qp; renderModal(); }));
   $$('#qa-rep .chip').forEach(b  => b.addEventListener('click', () => { keep(); qa.repeat = b.dataset.qr; renderModal(); }));
   $('#qa-x').addEventListener('click', closeModal);
@@ -1095,10 +1058,9 @@ function saveQuickAdd() {
            :                          { type: 'daily' };
   // 重複性的事情從被點的那天起算，不會回頭汙染過去的統計
   const born = qa.date > ymd() ? qa.date : ymd();
-  const subject = (($('#qa-subject') || {}).value || qa.subject || '').trim();
   S.tasks.push({
     id: uid(), title, priority: qa.priority, order: nextOrder(qa.priority),
-    schedule: sc, subject, createdAt: born, archived: false,
+    schedule: sc, createdAt: born, archived: false,
   });
   const label = qa.repeat === 'once' ? fmtMD(qa.date)
               : qa.repeat === 'weekly' ? `每週${WEEK[dt.getDay()]}` : '每天';
@@ -1109,7 +1071,7 @@ function saveQuickAdd() {
 
 /* ---------- 編輯一件事 ---------- */
 
-let ed = null;   // { id, title, priority, type, days, date, subject, mode }
+let ed = null;   // { id, title, priority, type, days, date, mode }
 
 function openTaskEdit(id) {
   const t = S.tasks.find(x => x.id === id);
@@ -1120,7 +1082,6 @@ function openTaskEdit(id) {
     type: sc.type || 'daily',
     days: (sc.days || []).slice(),
     date: sc.date || ymd(),
-    subject: t.subject || '',
     mode: 'from-today',
   };
   renderTaskEdit();
@@ -1176,10 +1137,6 @@ function renderTaskEdit() {
       <label class="fld" style="margin-top:12px"><span>日期</span>
         <input type="date" id="ed-date" value="${ed.date}"></label>` : ''}
 
-    <label class="fld" style="margin-top:14px"><span>科目（選填）</span>
-      <input id="ed-subject" list="subj-list-ed" placeholder="例如：微積分" maxlength="20" value="${esc(ed.subject || '')}"></label>
-    <datalist id="subj-list-ed">${distinctSubjects().map(s => `<option value="${esc(s)}">`).join('')}</datalist>
-
     ${changedRepeat ? `
       <div class="edwarn">
         <div class="ew-t">要從什麼時候開始改？</div>
@@ -1216,10 +1173,7 @@ function schedText(sc) {
 }
 
 function wireTaskEdit() {
-  const keep = () => {
-    const i = $('#ed-title'); if (i && typeof i.value === 'string') ed.title = i.value;
-    const s = $('#ed-subject'); if (s && typeof s.value === 'string') ed.subject = s.value;
-  };
+  const keep = () => { const i = $('#ed-title'); if (i && typeof i.value === 'string') ed.title = i.value; };
   $$('#ed-prio .chip').forEach(b => b.addEventListener('click', () => { keep(); ed.priority = b.dataset.ep; renderTaskEdit(); }));
   $$('#ed-type .chip').forEach(b => b.addEventListener('click', () => { keep(); ed.type = b.dataset.et; renderTaskEdit(); }));
   $$('#ed-days .chip').forEach(b => b.addEventListener('click', () => {
@@ -1245,7 +1199,6 @@ function saveTaskEdit() {
   const newSc = edSchedule();
   t.title = title;
   t.priority = ed.priority;
-  t.subject = (($('#ed-subject') || {}).value || ed.subject || '').trim();
 
   if (!scEqual(oldSc, newSc)) {
     if ((ed.type === 'weekly' || ed.type === 'daily') && ed.mode === 'from-today') {
@@ -1284,7 +1237,6 @@ function viewManage() {
         <div class="m-name">${esc(t.title)}</div>
         <div class="t-meta">
           <span class="tag" style="color:${p.color};border-color:${p.color}55">${p.icon} ${p.name}</span>
-          ${subjectTag(t)}
           ${schedLabel(t)}
           ${Array.isArray(t.segs) && t.segs.length > 1 ? `<span class="tag" style="color:#9b7bff;border-color:#9b7bff55">改過 ${t.segs.length - 1} 次</span>` : ''}
           ${r.planned ? `<span class="dim">成績 ${r.done}/${r.planned}</span>` : `<span class="dim">尚未開始</span>`}
@@ -1297,14 +1249,13 @@ function viewManage() {
   };
   const group = (label, arr) => arr.length
     ? `<div class="mgroup"><div class="mg-lab">${label}<span>${arr.length}</span></div>${sortTasks(arr, []).map(row).join('')}</div>` : '';
-  const activeF = bySubject(active);   // 科目篩選只影響下面「我的事情」清單，不影響隨手待辦
-  const onceList = activeF.filter(t => t.schedule.type === 'once');
+  const onceList = active.filter(t => t.schedule.type === 'once');
   const byType = {
-    '🔁 每天': activeF.filter(t => t.schedule.type === 'daily'),
-    '📆 每週': activeF.filter(t => t.schedule.type === 'weekly'),
-    '📝 待辦': activeF.filter(t => t.schedule.type === 'todo'),
+    '🔁 每天': active.filter(t => t.schedule.type === 'daily'),
+    '📆 每週': active.filter(t => t.schedule.type === 'weekly'),
+    '📝 待辦': active.filter(t => t.schedule.type === 'todo'),
   };
-  const visibleN = activeF.length - onceList.length;
+  const visibleN = active.length - onceList.length;
   const pendingTodos = active.filter(t => t.schedule.type === 'todo' && !doneEver(t.id));
 
   return `
@@ -1346,12 +1297,7 @@ function viewManage() {
           ? `${draft.date}（週${WEEK[parseYmd(draft.date).getDay()]}）・${daysBetween(ymd(), draft.date) === 0 ? '就是今天' : daysBetween(ymd(), draft.date) + ' 天後'}`
           : '⚠️ 這是過去的日期'}</p>` : ''}
 
-      <label class="fld" style="margin-top:14px"><span>科目（選填）</span>
-        <input id="f-subject" list="subj-list-f" placeholder="例如：微積分" maxlength="20" value="${esc(draft.subject || '')}"></label>
-      <datalist id="subj-list-f">${distinctSubjects().map(s => `<option value="${esc(s)}">`).join('')}</datalist>
-      <p class="hint">考試複習可以填科目，之後在「今日」「我的事情」可以照科目篩選。</p>
-
-      <button class="btn" id="f-add" style="margin-top:4px">加入</button>
+      <button class="btn" id="f-add" style="margin-top:18px">加入</button>
     </div>
 
     <div class="card">
@@ -1366,11 +1312,8 @@ function viewManage() {
 
     <div class="card">
       <h2>我的事情<span class="sub">${visibleN} 項</span></h2>
-      ${subjectFilterBar()}
       ${visibleN ? Object.entries(byType).map(([k, v]) => group(k, v)).join('')
-        : active.length
-          ? `<div class="empty"><span class="big">📘</span>「${esc(subjFilter)}」目前沒有排事情</div>`
-          : `<div class="empty"><span class="big">📋</span>還沒有任何事情</div>`}
+        : `<div class="empty"><span class="big">📋</span>還沒有任何事情</div>`}
       ${visibleN ? `
         <button class="btn ghost sm" id="m-resort" style="margin-top:6px">依重要程度重新排序</button>
         <p class="hint">✏️ 可以改名稱、重要程度、排程。改「每週幾」的時候可以選 <b>從今天起</b>，過去的紀錄與成績維持原樣。<br>
@@ -2328,14 +2271,8 @@ function wire() {
   // 統計期間
   $$('.modebar [data-range]').forEach(b => b.addEventListener('click', () => { statRange = b.dataset.range; render(); }));
 
-  // 科目篩選（今日／我的事情共用）
-  $$('[data-subjf]').forEach(b => b.addEventListener('click', () => { subjFilter = b.dataset.subjf; render(); }));
-
   // 新增任務表單
-  const keep = () => {
-    const i = $('#f-title'); if (i && typeof i.value === 'string') draft.title = i.value;
-    const s = $('#f-subject'); if (s && typeof s.value === 'string') draft.subject = s.value;
-  };
+  const keep = () => { const i = $('#f-title'); if (i && typeof i.value === 'string') draft.title = i.value; };
   $$('#f-prio .chip').forEach(b => b.addEventListener('click', () => { keep(); draft.priority = b.dataset.prio; render(); }));
   $$('#f-sched .chip').forEach(b => b.addEventListener('click', () => {
     keep(); draft.schedType = b.dataset.sch;
@@ -2541,13 +2478,12 @@ function addTask() {
     sc.days = draft.days.slice();
   }
   if (draft.schedType === 'once') sc.date = ($('#f-date') || {}).value || draft.date;
-  const subject = (($('#f-subject') || {}).value || draft.subject || '').trim();
 
   S.tasks.push({
     id: uid(), title, priority: draft.priority, order: nextOrder(draft.priority),
-    schedule: sc, subject, createdAt: ymd(), archived: false,
+    schedule: sc, createdAt: ymd(), archived: false,
   });
-  draft.title = ''; draft.subject = '';
+  draft.title = '';
   save(); render();
   const extra = sc.type === 'once'
     ? `（${fmtMD(sc.date)}，${daysBetween(ymd(), sc.date) === 0 ? '就是今天' : daysBetween(ymd(), sc.date) + ' 天後'}）`
