@@ -989,7 +989,7 @@ function openQuickAdd(date) {
   renderModal();
 }
 function closeModal() {
-  qa = null; ge = null; ed = null; cd = null;
+  qa = null; ge = null; ed = null; cd = null; delChoice = null;
   $('#modal').classList.remove('show');
   $('#modal-body').innerHTML = '';
 }
@@ -1249,6 +1249,8 @@ function viewManage() {
   const group = (label, arr) => arr.length
     ? `<div class="mgroup"><div class="mg-lab">${label}<span>${arr.length}</span></div>${sortTasks(arr, []).map(row).join('')}</div>` : '';
   const onceList = active.filter(t => t.schedule.type === 'once');
+  const trashList = S.tasks.filter(t => t.archived)
+    .sort((a, b) => (b.archivedAt || '').localeCompare(a.archivedAt || ''));
   const byType = {
     '🔁 每天': active.filter(t => t.schedule.type === 'daily'),
     '📆 每週': active.filter(t => t.schedule.type === 'weekly'),
@@ -1316,7 +1318,7 @@ function viewManage() {
       ${visibleN ? `
         <button class="btn ghost sm" id="m-resort" style="margin-top:6px">依重要程度重新排序</button>
         <p class="hint">✏️ 可以改名稱、重要程度、排程。改「每週幾」的時候可以選 <b>從今天起</b>，過去的紀錄與成績維持原樣。<br>
-        圓點可快速切換重要程度。刪除只會停用它，過去的成績會保留。<br>
+        圓點可快速切換重要程度。刪除時可以選擇<b>保留過去的紀錄與成績</b>，或是<b>整個清掉</b>。<br>
         清單順序可以在<b>行事曆或今日清單直接拖曳</b>調整。</p>` : ''}
       ${onceList.length ? `
         <details class="mgroup-collapse" style="margin-top:14px">
@@ -1324,7 +1326,56 @@ function viewManage() {
           <p class="hint" style="margin-top:0">不列在上面的清單，成績還是照算；點開才看得到，方便刪除或修改。</p>
           ${sortTasks(onceList, []).map(row).join('')}
         </details>` : ''}
+      ${trashList.length ? `
+        <details class="mgroup-collapse" style="margin-top:14px">
+          <summary class="mg-lab">🗑️ 已刪除<span>${trashList.length}</span></summary>
+          <p class="hint" style="margin-top:0">刪除時如果選了「保留過去紀錄」，這裡看得到、行事曆和成績過去的日子也看得到；點「整個清除」可以連過去也一起清乾淨。</p>
+          ${trashList.map(t => `<div class="mrow">
+            <div class="m-main">
+              <div class="m-name">${esc(t.title)}</div>
+              <div class="t-meta"><span class="dim">${t.archivedAt ? `刪除於 ${fmtMD(t.archivedAt)}` : '刪除日期未知'}</span></div>
+            </div>
+            <button class="icobtn" data-restore="${t.id}" title="還原">↩️</button>
+            <button class="icobtn del" data-purge="${t.id}" title="整個清除（含過去紀錄）">🗑️</button>
+          </div>`).join('')}
+        </details>` : ''}
     </div>`;
+}
+
+let delChoice = null;   // 刪除確認彈窗草稿：{ id }
+
+/* 刪除任務前讓使用者選：只刪以後（過去紀錄與成績保留）還是連過去的紀錄也整個清掉 */
+function openDeleteChoice(id) {
+  const t = S.tasks.find(x => x.id === id);
+  if (!t) return;
+  delChoice = { id };
+  $('#modal-body').innerHTML = `
+    <div class="mhead">
+      <div><div class="mh-d">刪除「${esc(t.title)}」</div>
+           <div class="mh-s">選一種刪除方式：</div></div>
+    </div>
+    <div class="pickbox">
+      <div class="pk-t">🗂️ 只刪除以後</div>
+      <div class="pk-s">以後不會再出現，但過去打勾的紀錄和成績都保留</div>
+      <button class="btn" id="del-keep" style="margin-top:10px">只刪除以後（保留過去紀錄）</button>
+    </div>
+    <div class="pickbox" style="margin-top:11px">
+      <div class="pk-t">🗑️ 整個刪除</div>
+      <div class="pk-s">連過去的紀錄和成績一起清掉，行事曆、成績都不會再看到它</div>
+      <button class="btn danger" id="del-all" style="margin-top:10px">整個刪除（含過去紀錄）</button>
+    </div>
+    <button class="btn ghost" id="del-cancel" style="margin-top:11px">取消</button>`;
+  $('#modal').classList.add('show');
+  $('#del-keep').addEventListener('click', () => {
+    t.archived = true; t.archivedAt = ymd();
+    closeModal(); save(); render(); toast(`「${t.title}」已刪除，過去的紀錄保留`);
+  });
+  $('#del-all').addEventListener('click', () => {
+    if (!confirm('確定嗎？這樣過去打勾的紀錄和成績也會一起消失，無法復原。')) return;
+    t.archived = true; t.archivedAt = t.createdAt || S.profile.createdAt || ymd();
+    closeModal(); save(); render(); toast(`「${t.title}」已整個刪除`);
+  });
+  $('#del-cancel').addEventListener('click', closeModal);
 }
 
 /* ---------- 課表 ---------- */
@@ -2302,10 +2353,20 @@ function wire() {
   });
   $$('[data-del]').forEach(b => b.addEventListener('click', (e) => {
     e.stopPropagation();
-    if (!confirm('確定刪除？過去的紀錄與成績會保留。')) return;
-    const t = S.tasks.find(x => x.id === b.dataset.del);
-    if (t) { t.archived = true; t.archivedAt = ymd(); }
-    save(); render();
+    openDeleteChoice(b.dataset.del);
+  }));
+  $$('[data-restore]').forEach(b => b.addEventListener('click', () => {
+    const t = S.tasks.find(x => x.id === b.dataset.restore);
+    if (!t) return;
+    t.archived = false; delete t.archivedAt;
+    save(); render(); toast(`「${t.title}」已還原`);
+  }));
+  $$('[data-purge]').forEach(b => b.addEventListener('click', () => {
+    const t = S.tasks.find(x => x.id === b.dataset.purge);
+    if (!t) return;
+    if (!confirm(`確定要把「${t.title}」過去的紀錄和成績也整個清掉嗎？清掉後完全看不到、無法復原。`)) return;
+    t.archivedAt = t.createdAt || S.profile.createdAt || ymd();
+    save(); render(); toast(`「${t.title}」已整個清除`);
   }));
 
   // 課表
@@ -3053,7 +3114,7 @@ function init() {
   });
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
-    if (qa || ge || ed) closeModal(); else $('#celebrate').classList.remove('show');
+    if (qa || ge || ed || delChoice) closeModal(); else $('#celebrate').classList.remove('show');
   });
 
   render();
