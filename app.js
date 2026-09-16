@@ -35,9 +35,7 @@ function courseColor(title) {
 }
 
 const STARTER_TASKS = [
-  { title: '喝滿 2000cc 水', priority: 'normal',    schedule: { type: 'daily' } },
   { title: '運動 30 分鐘',   priority: 'important', schedule: { type: 'weekly', days: [1, 3, 5] } },
-  { title: '閱讀 20 頁',     priority: 'light',     schedule: { type: 'daily' } },
 ];
 
 /* ---------------- 工具 ---------------- */
