@@ -124,6 +124,8 @@ function migrate(o) {
     }
     // 沒有建立日的舊任務 → 用最早的紀錄日，避免統計把更早的日子算成漏掉
     if (!t.createdAt) t.createdAt = firstLog || out.profile.createdAt || ymd();
+    // 舊版刪除沒有記錄刪除日期，補上「今天」讓過去的紀錄能恢復顯示（往後刪除才會記正確日期）
+    if (t.archived && !t.archivedAt) t.archivedAt = ymd();
   });
   out.goals.forEach(g => {
     if (!Array.isArray(g.entries)) g.entries = [];
@@ -238,7 +240,8 @@ function changeScheduleAll(task, newSc) {
 /* 純粹的行事曆判斷：這一天原本就排了這件事嗎？
    ★ 建立日之前的日子一律不算 —— 才不會回頭看像是「以前都沒做」 */
 function isPlanned(task, date) {
-  if (task.archived) return false;
+  // 刪除（封存）只擋「刪除當天之後」，刪除前的日子照舊計算，過去的紀錄與成績才不會跟著消失
+  if (task.archived && (!task.archivedAt || date >= task.archivedAt)) return false;
   const sc = scheduleAt(task, date);
   // 指定日期的事：日期本身就是排程，不受建立日限制
   if (sc.type === 'once') return sc.date === date;
@@ -2306,7 +2309,7 @@ function wire() {
     e.stopPropagation();
     if (!confirm('確定刪除？過去的紀錄與成績會保留。')) return;
     const t = S.tasks.find(x => x.id === b.dataset.del);
-    if (t) t.archived = true;
+    if (t) { t.archived = true; t.archivedAt = ymd(); }
     save(); render();
   }));
 
@@ -2723,7 +2726,7 @@ function mergeStates(local, remote) {
   for (const t of (primary.tasks || [])) {
     const old = tMap.get(t.id);
     const n = clone(t);
-    if (old && old.archived && !n.archived) n.archived = true;   // 任一邊刪掉就是刪掉
+    if (old && old.archived && !n.archived) { n.archived = true; n.archivedAt = old.archivedAt; }   // 任一邊刪掉就是刪掉
     tMap.set(t.id, n);
   }
   out.tasks = Array.from(tMap.values());

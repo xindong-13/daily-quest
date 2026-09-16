@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-「每日任務」(Daily Quest) — a single-page PWA task/habit tracker in Traditional Chinese. Zero build step, zero framework, zero npm dependencies. Three files carry the entire app: `index.html`, `app.js` (~2800 lines), `style.css`. Opens directly via `file://` (double-click `index.html`) or served over HTTP for PWA/notification features.
+「每日任務」(Daily Quest) — a single-page PWA task/habit tracker in Traditional Chinese. Zero build step, zero framework, zero npm dependencies. Three files carry the entire app: `index.html`, `app.js` (~3100 lines), `style.css`. Opens directly via `file://` (double-click `index.html`) or served over HTTP for PWA/notification features.
 
 Deployed via **GitHub Pages only**: `https://xindong-13.github.io/daily-quest/`. The user pushes via the one-click `update.bat` in the repo root (mirrors the same script in the sibling `コトバ Kotoba` / `Echo英語` projects — keep the naming/behavior consistent across all three if you touch it). They've also used the GitHub web UI directly (uploading/editing files at github.com) as a fallback when not at this machine — either path is fine to suggest.
 
@@ -22,7 +22,7 @@ No build, no test suite, no linter, no package.json — this is intentional (see
 
 Versioning is done via the `.bat`/`.ps1` scripts in the repo root (Windows only):
 
-- `bump-version.ps1` — increments `dq-vNN` in `sw.js` and keeps `APPVER` in `index.html:61` in sync. Also creates `.nojekyll` if missing (tells GitHub Pages to skip Jekyll processing). **Run this after any change to `app.js`/`index.html`/`style.css`/`sw.js`** — the service worker caches assets by version string, and phones/browsers won't see the update otherwise.
+- `bump-version.ps1` — increments `dq-vNN` in `sw.js` and keeps `APPVER` in `index.html` (the `<script>const APPVER = ...</script>` line, near the top) in sync. Also creates `.nojekyll` if missing (tells GitHub Pages to skip Jekyll processing). **Run this after any change to `app.js`/`index.html`/`style.css`/`sw.js`** — the service worker caches assets by version string, and phones/browsers won't see the update otherwise.
 - `update.bat` — the one-click deploy: calls `bump-version.ps1`, then `git add -A`, commits ("update"), pushes to `origin`. This is the user's primary push path now (renamed from `GitHub-一鍵更新.bat` to match the `update.bat` naming used in the sibling `コトバ Kotoba` / `Echo英語` projects).
 - `GitHub-第一次設定.bat` / `GitHub-用權杖登入.bat` — one-time git/GitHub setup and re-auth; only needed once per machine, or if push auth breaks.
 
