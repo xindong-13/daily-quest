@@ -34,9 +34,7 @@ function courseColor(title) {
   return custom || COURSE_PALETTE[hashStr(title || '') % COURSE_PALETTE.length];
 }
 
-const STARTER_TASKS = [
-  { title: '運動 30 分鐘',   priority: 'important', schedule: { type: 'weekly', days: [1, 3, 5] } },
-];
+const STARTER_TASKS = [];
 
 /* ---------------- 工具 ---------------- */
 
@@ -2037,7 +2035,6 @@ function viewSettings() {
     </div>
     <div class="card">
       <h2>其他</h2>
-      <button class="btn ghost" id="s-demo" style="margin-bottom:10px">載入 3 個範例任務</button>
       <button class="btn danger" id="s-reset">清除所有資料</button>
       <p class="hint" style="text-align:center;margin-top:14px">
         版本 ${typeof APPVER !== 'undefined' ? esc(APPVER) : '本機檔案'}
@@ -2457,10 +2454,6 @@ function wire() {
       } catch (err) { toast('匯入失敗：檔案格式不正確'); }
     };
     rd.readAsText(f);
-  });
-  if ($('#s-demo')) $('#s-demo').addEventListener('click', () => {
-    STARTER_TASKS.forEach(t => S.tasks.push({ ...t, id: uid(), createdAt: ymd(), archived: false }));
-    save(); TAB = 'today'; render(); toast('已載入範例任務');
   });
   if ($('#s-reset')) $('#s-reset').addEventListener('click', () => {
     if (!confirm('這會刪除所有事情、目標與紀錄，無法復原。確定嗎？')) return;
@@ -3070,7 +3063,7 @@ function init() {
   startSyncLoop();
   if (syncReady()) { setSyncStatus('ready'); pullNow({ quiet: true }).catch(() => {}); }
 
-  if (fresh) setTimeout(() => celebrate('🌱', '開始了', '先放了 3 個範例，完成一個試試看'), 500);
+  if (fresh) setTimeout(() => celebrate('🌱', '開始了', '到「事情」分頁新增你的第一件事吧'), 500);
 }
 
 if (typeof document !== 'undefined') {
