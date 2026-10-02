@@ -89,16 +89,19 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 18px 0; }
   background: rgba(109,140,255,.13); border-radius: 999px; padding: 2px 10px;
 }
 .hero-xp { font-size: 12.5px; color: var(--dim); margin-top: 1px; font-weight: 600; }
-.hero-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 11px; }
+/* 不換行：同步標籤的字（同步中… ↔ 剛剛）每 20 秒會變長變短，
+   換行的話整張人物卡高度跟著變，下面的畫面就會上下跳 */
+.hero-chips { display: flex; gap: 6px; flex-wrap: nowrap; margin-top: 11px; }
 .chipx {
   font-size: 12.5px; font-weight: 700; color: var(--dim);
   background: rgba(255,255,255,.04); border: 1px solid var(--line);
   border-radius: 999px; padding: 4px 11px;
+  white-space: nowrap; flex: 0 0 auto;
 }
 .chipx.flame { color: var(--warn); border-color: rgba(255,181,71,.24); background: rgba(255,181,71,.07); }
 .chipx.good  { color: var(--good); border-color: rgba(61,220,151,.24); background: rgba(61,220,151,.07); }
 
-.chipx.sy { cursor: pointer; transition: var(--tr); }
+.chipx.sy { cursor: pointer; transition: var(--tr); flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .chipx.sy:hover { border-color: var(--line2); color: var(--text); }
 .chipx.sy.sy-ok      { color: var(--good); border-color: rgba(61,220,151,.24); background: rgba(61,220,151,.07); }
 .chipx.sy.sy-syncing { color: var(--accent); border-color: rgba(109,140,255,.3); background: rgba(109,140,255,.09); }
@@ -356,6 +359,26 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 18px 0; }
 .cal-dots i { width: 5px; height: 5px; border-radius: 50%; display: block; }
 .cal-dots .more { font-size: 8.5px; color: var(--dim); font-weight: 700; }
 .cal-cnt { font-size: 9.5px; color: var(--dim); font-weight: 700; margin-top: auto; }
+/* 格子裡的事情名稱：只有電腦（寬螢幕）顯示，手機維持小圓點 */
+.cal-items { display: none; }
+@media (min-width: 761px) {
+  .cal-c { aspect-ratio: auto; min-height: 118px; align-items: stretch; padding: 5px 4px 4px; }
+  .cal-n { text-align: center; }
+  .cal-dots { display: none; }
+  .cal-items { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .ci {
+    font-size: 11px; line-height: 1.35; font-weight: 600; text-align: left;
+    background: rgba(255,255,255,.05); border-left: 3px solid var(--dim);
+    border-radius: 4px; padding: 1px 4px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .ci.p-must { background: rgba(255,95,121,.13); }
+  .ci.p-important { background: rgba(255,181,71,.10); }
+  .ci.done { opacity: .4; text-decoration: line-through; }
+  .ci-more { font-size: 10.5px; color: var(--dim); font-weight: 700; padding-left: 4px; }
+  .cal-c.sel .ci { background: rgba(255,255,255,.18); color: #fff; }
+  .cal-c.sel .ci-more { color: #fff; }
+}
 .cal-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 13px; font-size: 11.5px; color: var(--dim); }
 .cal-legend span { display: inline-flex; align-items: center; gap: 5px; }
 .cal-legend i { width: 7px; height: 7px; border-radius: 50%; display: block; }

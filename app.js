@@ -606,10 +606,13 @@ const gdraft = { title: '', target: 20, unit: '本', deadline: '' };
 
 function thisWeekStart(d = ymd()) { return addDays(d, -parseYmd(d).getDay()); }
 
-function render() {
+function render(opts = {}) {
+  const v = $('#view');
+  // 記下重畫前畫面的位置：上面人物卡的高度變了（例如多一行字），
+  // 下面的內容就會被推上推下，手機上看起來像在亂跳 → 重畫後把位置補回來
+  const y0 = window.scrollY, top0 = v.getBoundingClientRect().top;
   renderHero();
   $$('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === TAB));
-  const v = $('#view');
   if (TAB === 'today')    v.innerHTML = viewToday();
   if (TAB === 'calendar') v.innerHTML = viewCalendar();
   if (TAB === 'manage')   v.innerHTML = viewManage();
@@ -618,6 +621,7 @@ function render() {
   if (TAB === 'goals')    v.innerHTML = viewGoals();
   if (TAB === 'settings') v.innerHTML = viewSettings();
   wire();
+  if (!opts.top && y0 > 0) window.scrollTo(0, y0 + (v.getBoundingClientRect().top - top0));
 }
 
 function renderHero() {
@@ -910,6 +914,8 @@ function viewWeek() {
     </div>`;
 }
 
+const CAL_ITEMS_MAX = 4;   // 月曆格子（電腦版）最多列幾件，其餘寫「+N 件」
+
 function viewMonth() {
   const now = new Date();
   if (!calYM) calYM = { y: now.getFullYear(), m: now.getMonth() };
@@ -936,10 +942,21 @@ function viewMonth() {
     if (hasCrit) mCrit++;
     const dots = list.slice(0, 6).map(t =>
       `<i style="background:${PRIO[prioOf(t)].color}${doneIds.includes(t.id) ? ';opacity:.28' : ''}"></i>`).join('');
+    // 電腦（寬螢幕）直接列出事情名稱；手機格子太小，CSS 會改成只顯示上面的小圓點
+    // 「每天」的例行事每格都一樣，排最後；先列指定日期、每週的事，才看得到未來真正要做什麼
+    const kindRank = (t) => ({ once: 0, todo: 0, weekly: 1 })[scheduleAt(t, d).type] ?? 2;
+    const sorted = sortTasks(list, doneIds, d).map((t, i) => ({ t, i }))
+      .sort((a, b) => kindRank(a.t) - kindRank(b.t) || a.i - b.i).map(x => x.t);
+    const items = sorted.slice(0, CAL_ITEMS_MAX).map(t => {
+      const pk = prioOf(t);
+      return `<div class="ci p-${pk} ${doneIds.includes(t.id) ? 'done' : ''}" style="border-left-color:${PRIO[pk].color}"
+                   title="${esc(t.title)}">${esc(t.title)}</div>`;
+    }).join('');
     const allDone = list.length > 0 && doneN === list.length;
     return `<div class="cal-c ${d === today ? 'today' : ''} ${d === calSel ? 'sel' : ''} ${allDone ? 'ok' : ''} ${hasExam ? 'has-exam' : ''}" data-cal="${d}">
       <div class="cal-n ${hasExam ? 'exam' : hasCrit ? 'crit' : hasImp ? 'imp' : ''}">${+d.slice(8)}</div>
       <div class="cal-dots">${dots}${list.length > 6 ? `<span class="more">+${list.length - 6}</span>` : ''}</div>
+      ${list.length ? `<div class="cal-items">${items}${list.length > CAL_ITEMS_MAX ? `<div class="ci-more">+${list.length - CAL_ITEMS_MAX} 件</div>` : ''}</div>` : ''}
       ${list.length ? `<div class="cal-cnt">${doneN}/${list.length}</div>` : ''}
     </div>`;
   };
@@ -3096,7 +3113,7 @@ function init() {
   save();
 
   $$('.tabs button').forEach(b => b.addEventListener('click', () => {
-    TAB = b.dataset.tab; window.scrollTo({ top: 0, behavior: 'smooth' }); render();
+    TAB = b.dataset.tab; window.scrollTo({ top: 0, behavior: 'smooth' }); render({ top: true });
   }));
   $('#cel-close').addEventListener('click', () => $('#celebrate').classList.remove('show'));
   $('#celebrate').addEventListener('click', e => { if (e.target.id === 'celebrate') $('#celebrate').classList.remove('show'); });
