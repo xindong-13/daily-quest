@@ -73,7 +73,7 @@ function blankState() {
     courseColors: {}, // 課表：{ 課程名稱: '#hex' }，使用者自己挑的顏色，優先於自動配色
     log: {},          // 'YYYY-MM-DD' -> { done:[id], times:{id:'HH:MM'}, perfect }
     dayOrder: {},     // 'YYYY-MM-DD' -> [taskId...]  某天手動排過的順序
-    streak: { current: 0, best: 0, lastActive: null, shields: 0, shielded: [] },
+    streak: { current: 0, best: 0, lastActive: null },
     stats: { totalDone: 0, perfectDays: 0 },
     settings: { reminders: ['09:00', '20:30'], notify: false },
     lastOpen: null,
@@ -102,6 +102,7 @@ function migrate(o) {
   };
   delete out.rewards; delete out.redemptions; delete out.achievements;
   delete out.profile.xp;
+  delete out.streak.shields; delete out.streak.shielded;
   out.version = 3;
 
   const firstLog = Object.keys(out.log).sort()[0];
@@ -419,18 +420,14 @@ function overallReport(from, to) {
 /* ---------------- 連續天數 ---------------- */
 
 function activeDay(d) {
-  return (S.log[d] && S.log[d].done && S.log[d].done.length > 0) || S.streak.shielded.includes(d);
+  return !!(S.log[d] && S.log[d].done && S.log[d].done.length > 0);
 }
 function maintainStreak() {
   const st = S.streak, today = ymd();
   if (!st.lastActive || st.lastActive >= today) return;
   let cur = addDays(st.lastActive, 1);
   while (cur < today) {
-    if (activeDay(cur)) { cur = addDays(cur, 1); continue; }
-    if (st.shields > 0) {
-      st.shields--; st.shielded.push(cur); st.current++;
-      toast(`🛡️ ${fmtMD(cur)} 沒有紀錄，自動用掉 1 張保護卡`);
-    } else { st.current = 0; st.lastActive = null; return; }
+    if (!activeDay(cur)) { st.current = 0; st.lastActive = null; return; }
     cur = addDays(cur, 1);
   }
   st.lastActive = addDays(today, -1);
@@ -442,10 +439,6 @@ function bumpStreak() {
   st.current = (st.lastActive === yest || activeDay(yest)) ? st.current + 1 : 1;
   st.lastActive = today;
   if (st.current > st.best) st.best = st.current;
-  if (st.current % 10 === 0 && st.shields < 2) {
-    st.shields++;
-    toast('🛡️ 連續 10 天，獲得 1 張保護卡');
-  }
 }
 /* ---------------- 勾選 ---------------- */
 
