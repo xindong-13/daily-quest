@@ -34,8 +34,6 @@ function courseColor(title) {
   return custom || COURSE_PALETTE[hashStr(title || '') % COURSE_PALETTE.length];
 }
 
-const STARTER_TASKS = [];
-
 /* ---------------- 工具 ---------------- */
 
 const $  = (s, r = document) => r.querySelector(s);
@@ -284,7 +282,6 @@ function overdueTasks() {
 }
 
 /* 「今日」分頁真正該做的事（不含逾期，逾期另外列） */
-function todaysTasks(date = ymd()) { return dayTasks(date); }
 
 /* 一份清單裡已完成的 id（給排序用） */
 function doneIdsOf(list, date) {
@@ -480,7 +477,7 @@ function toggleTask(id, ev, date) {
       toast(`✅ 提前完成「${t.title}」　（排在 ${fmtMD(day)}）`);
     }
 
-    const list = todaysTasks(day);
+    const list = dayTasks(day);
     const perfect = list.length > 0 && list.every(x => isTaskDone(x, day));
     if (perfect && !lg.perfect) { lg.perfect = true; S.stats.perfectDays++; }
     if (perfect && isToday) {
@@ -619,7 +616,7 @@ function render(opts = {}) {
 
 function renderHero() {
   const lg = dayLog();
-  const list = todaysTasks();
+  const list = dayTasks(ymd());
   const doneN = list.filter(t => isTaskDone(t, ymd())).length;
   const pct = list.length ? doneN / list.length : 0;
   const R = 33, C = 2 * Math.PI * R;
@@ -784,7 +781,7 @@ function quickTodoCard(todos, lg, today) {
 function viewToday() {
   const today = ymd();
   const lg = dayLog(today);
-  const list = todaysTasks(today);
+  const list = dayTasks(today);
   const todos = list.filter(t => (t.schedule || {}).type === 'todo');
   const mainList = list.filter(t => (t.schedule || {}).type !== 'todo');
   const done = list.filter(t => isTaskDone(t, today));
@@ -795,6 +792,13 @@ function viewToday() {
   const goalCards = S.goals.filter(g => !g.archived && !goalStats(g).done);
 
   return `
+    <div class="card today-add">
+      <div class="today-add-row">
+        <input id="ta-title" placeholder="＋ 今天要做什麼？打完按 Enter" maxlength="60" enterkeyhint="done">
+        <button class="btn" id="ta-add">加入</button>
+      </div>
+      <button class="linkbtn" id="ta-more">更多設定（重要程度、每天／每週重複、隨手待辦）›</button>
+    </div>
     ${examCard()}
     ${upcomingList()}
     ${quickTodoCard(todos, lg, today)}
@@ -804,7 +808,7 @@ function viewToday() {
         <span class="hcount">${done.length}<em>/${list.length}</em></span></h2>
       <div class="topbar"><i style="width:${(rate * 100).toFixed(0)}%"></i></div>
       ${mainList.length === 0
-        ? `<div class="empty"><span class="big">🌤</span>今天沒有排事情<br><span class="dim">到「行事曆」雙擊某天就能新增</span></div>`
+        ? `<div class="empty"><span class="big">🌤</span>今天沒有排事情<br><span class="dim">在最上面的輸入框打字就能新增</span></div>`
         : `<div class="tasklist">${sorted.map(t => taskItem(t, lg)).join('')}</div>`}
     </div>
 
@@ -994,8 +998,8 @@ function viewMonth() {
 
 let qa = null;
 
-function openQuickAdd(date) {
-  qa = { date, title: '', priority: 'normal', repeat: 'once' };
+function openQuickAdd(date, title = '') {
+  qa = { date, title, priority: 'normal', repeat: 'once' };
   renderModal();
 }
 function closeModal() {
@@ -1013,6 +1017,7 @@ function renderModal() {
     once:   { t: '只有這天', d: '一次性行程，做完就結束' },
     weekly: { t: `每週${WEEK[dt.getDay()]}`, d: `以後每個週${WEEK[dt.getDay()]}都會自動出現` },
     daily:  { t: '每天', d: '從這天起每天都會自動出現' },
+    todo:   { t: '隨手待辦', d: '不限哪一天，做完勾掉就好（例如：還書）' },
   };
   $('#modal-body').innerHTML = `
     <div class="mhead">
@@ -1064,15 +1069,14 @@ function saveQuickAdd() {
   const dt = parseYmd(qa.date);
   const sc = qa.repeat === 'once'   ? { type: 'once', date: qa.date }
            : qa.repeat === 'weekly' ? { type: 'weekly', days: [dt.getDay()] }
+           : qa.repeat === 'todo'   ? { type: 'todo' }
            :                          { type: 'daily' };
   // 重複性的事情從被點的那天起算，不會回頭汙染過去的統計
   const born = qa.date > ymd() ? qa.date : ymd();
-  S.tasks.push({
-    id: uid(), title, priority: qa.priority, order: nextOrder(qa.priority),
-    schedule: sc, createdAt: born, archived: false,
-  });
+  createTask(title, qa.priority, sc, born);
   const label = qa.repeat === 'once' ? fmtMD(qa.date)
-              : qa.repeat === 'weekly' ? `每週${WEEK[dt.getDay()]}` : '每天';
+              : qa.repeat === 'weekly' ? `每週${WEEK[dt.getDay()]}`
+              : qa.repeat === 'todo' ? '隨手待辦' : '每天';
   const flag = PRIO[qa.priority].icon;
   save(); closeModal(); render();
   toast(`✅ ${flag}${label}：${title}`);
@@ -1571,7 +1575,7 @@ function viewStats() {
   const from = rangeStart();
   const rep = overallReport(from);
   const lgToday = dayLog();
-  const todayList = todaysTasks();
+  const todayList = dayTasks(ymd());
   const todayLeft = todayList.filter(t => !lgToday.done.includes(t.id)).length;
   const label = statRange === 'week' ? '本週' : statRange === 'month' ? '本月' : '全部';
 
@@ -2347,6 +2351,11 @@ function wire() {
   if ($('#f-add')) $('#f-add').addEventListener('click', addTask);
   if ($('#f-title')) $('#f-title').addEventListener('keydown', e => { if (e.key === 'Enter') addTask(); });
 
+  // 今日：直接新增（預設＝只有今天、普通）
+  if ($('#ta-add')) $('#ta-add').addEventListener('click', addTodayTask);
+  if ($('#ta-title')) $('#ta-title').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) addTodayTask(); });
+  if ($('#ta-more')) $('#ta-more').addEventListener('click', () => openQuickAdd(ymd(), ($('#ta-title') || {}).value || ''));
+
   // 隨手待辦
   if ($('#td-add')) $('#td-add').addEventListener('click', addQuickTodo);
   if ($('#td-title')) $('#td-title').addEventListener('keydown', e => { if (e.key === 'Enter') addQuickTodo(); });
@@ -2533,6 +2542,14 @@ function wire() {
   });
 }
 
+/* 新增一件事：今日輸入框、行事曆＋、事情分頁表單、隨手待辦都走這裡 */
+function createTask(title, priority, schedule, createdAt = ymd()) {
+  S.tasks.push({
+    id: uid(), title, priority, order: nextOrder(priority),
+    schedule, createdAt, archived: false,
+  });
+}
+
 function addTask() {
   const el = $('#f-title'); if (!el) return;
   const title = el.value.trim();
@@ -2544,10 +2561,7 @@ function addTask() {
   }
   if (draft.schedType === 'once') sc.date = ($('#f-date') || {}).value || draft.date;
 
-  S.tasks.push({
-    id: uid(), title, priority: draft.priority, order: nextOrder(draft.priority),
-    schedule: sc, createdAt: ymd(), archived: false,
-  });
+  createTask(title, draft.priority, sc);
   draft.title = '';
   save(); render();
   const extra = sc.type === 'once'
@@ -2556,14 +2570,21 @@ function addTask() {
   toast(`✅ 已新增「${title}」${extra}`);
 }
 
+function addTodayTask() {
+  const el = $('#ta-title'); if (!el) return;
+  const title = el.value.trim();
+  if (!title) return toast('請先輸入要做什麼');
+  createTask(title, 'normal', { type: 'once', date: ymd() });
+  save(); render();
+  toast(`✅ 已加到今天：${title}`);
+  const i = $('#ta-title'); if (i && i.focus) i.focus();   // 方便連續輸入好幾件
+}
+
 function addQuickTodo() {
   const el = $('#td-title'); if (!el) return;
   const title = el.value.trim();
   if (!title) return toast('請輸入名稱');
-  S.tasks.push({
-    id: uid(), title, priority: 'normal', order: nextOrder('normal'),
-    schedule: { type: 'todo' }, createdAt: ymd(), archived: false,
-  });
+  createTask(title, 'normal', { type: 'todo' });
   save(); render();
   toast(`✅ 已加入「${title}」`);
 }
@@ -3050,7 +3071,7 @@ function scheduleReminders() {
 
 function fireReminder() {
   const today = ymd();
-  const rest = todaysTasks().filter(t => !isTaskDone(t, today));
+  const rest = dayTasks(ymd()).filter(t => !isTaskDone(t, today));
   const od = overdueTasks().filter(t => !isTaskDone(t, today));
   const exam = rest.filter(t => prioOf(t) === 'exam');
   const crit = rest.filter(t => prioOf(t) === 'must');
@@ -3095,10 +3116,7 @@ function init() {
   loadSync();
   S = load();
   const fresh = !S;
-  if (fresh) {
-    S = blankState();
-    STARTER_TASKS.forEach(t => S.tasks.push({ ...t, id: uid(), createdAt: ymd(), archived: false }));
-  }
+  if (fresh) S = blankState();
   maintainStreak();
   pruneDayOrder();
   S.lastOpen = ymd();
@@ -3134,7 +3152,7 @@ function init() {
   startSyncLoop();
   if (syncReady()) { setSyncStatus('ready'); pullNow({ quiet: true }).catch(() => {}); }
 
-  if (fresh) setTimeout(() => celebrate('🌱', '開始了', '到「事情」分頁新增你的第一件事吧'), 500);
+  if (fresh) setTimeout(() => celebrate('🌱', '開始了', '在「今日」上面的輸入框打字，就能新增第一件事'), 500);
 }
 
 if (typeof document !== 'undefined') {
@@ -3147,7 +3165,7 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     ymd, parseYmd, addDays, daysBetween, fmtMD, hashStr, clamp,
     PRIO, PRIO_ORDER, WEEK, blankState, migrate, uid,
-    isPlanned, dayTasks, calendarTasks, todaysTasks, overdueDays, daysUntil, prioOf, sortTasks,
+    isPlanned, dayTasks, calendarTasks, overdueDays, daysUntil, prioOf, sortTasks,
     isTaskDone, doneIdsOf, overdueTasks, overdueCard,
     scheduleAt, changeScheduleFrom, changeScheduleAll, schedText, scEqual,
     orderOf, nextOrder, resortByPriority, reorderWithin, moveTaskToDay,

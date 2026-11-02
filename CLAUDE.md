@@ -83,5 +83,4 @@ Minimum check after any change:
 - `規劃書.md` — original feature/design plan, useful for *why* a feature exists.
 - `使用說明.md` — end-user manual; the most precise spec of intended behavior for scheduling, streaks, overdue handling, and stats — treat it as the source of truth for expected behavior when in doubt.
 - `設定教學_從頭到尾.md` — full setup walkthrough (Node.js → GitHub Pages → phone install → Supabase sync).
-- `雲端同步設定教學.md` / `手機安裝教學_iPhone.md` — subset extracts of the above, generally redundant with it.
-- `GitHub Pages 搬家指南.md` / `GitHub搬家_每日任務.md` — record of the Netlify→GitHub Pages migration (already completed, see "What this is" above); kept as history/rationale, not a task to redo.
+- The old subset docs (`雲端同步設定教學.md`, `手機安裝教學_iPhone.md`) and the Netlify→GitHub Pages migration notes were deleted as redundant (2026-11); recover from git history if ever needed.
