@@ -194,6 +194,21 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: 18px 0; }
 .task.overdue { animation: pulseRed 2.6s ease-in-out infinite; }
 @keyframes pulseRed { 0%,100% { box-shadow: 0 0 0 0 rgba(255,95,121,0) } 50% { box-shadow: 0 0 0 3px rgba(255,95,121,.14) } }
 
+/* ---------- 今天完成了 ---------- */
+.done-today { border-color: rgba(61,220,151,.35);
+  background: linear-gradient(180deg, rgba(61,220,151,.06), transparent 70%), var(--surface); }
+.dt-row { display: flex; align-items: center; gap: 9px; padding: 9px 2px; border-bottom: 1px solid var(--line); }
+.dt-row:last-child { border-bottom: none; }
+.dt-time { flex: 0 0 42px; font-size: 12px; font-weight: 700; color: var(--dim); font-variant-numeric: tabular-nums; }
+.dt-check { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--good); color: #0c0e13; font-size: 11px; font-weight: 900; }
+.dt-name { flex: 1 1 auto; min-width: 0; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.dt-row .tag { flex: 0 0 auto; }
+.dt-undo { flex: 0 0 auto; font-size: 12px; font-weight: 700; color: var(--dim); padding: 5px 10px;
+  border: 1px solid var(--line); border-radius: 9px; background: var(--elev); transition: var(--tr); }
+.dt-undo:hover { color: var(--bad); border-color: rgba(255,95,121,.45); }
+@media (max-width: 420px) { .dt-row .tag { display: none; } }
+
 /* ---------- 考試提醒 ---------- */
 .exam-card { border-color: rgba(255,214,10,.4); }
 .exam-row { display: flex; align-items: center; gap: 13px; padding: 10px 2px; border-bottom: 1px solid var(--line); }

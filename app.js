@@ -778,6 +778,35 @@ function quickTodoCard(todos, lg, today) {
   </div>`;
 }
 
+/* 今天完成了：照勾選時間列出今天打勾的所有事（含逾期、隨手待辦），
+   方便回頭檢查有沒有誤觸，也順便看一下今天的成果。
+   只讀今天的紀錄，「取消」就是一般的取消勾選，不會動到別天。 */
+function doneTodayCard(today) {
+  const lg = S.log[today];
+  const times = (lg && lg.times) || {};
+  const rows = ((lg && lg.done) || [])
+    .map(id => S.tasks.find(t => t.id === id))
+    .filter(Boolean)
+    .sort((a, b) => String(times[b.id] || '').localeCompare(String(times[a.id] || '')));
+  if (!rows.length) return '';
+  return `<div class="card done-today">
+    <h2>🏆 今天完成了</h2>
+    <div class="dt-list">
+      ${rows.map(t => {
+        const pk = prioOf(t), p = PRIO[pk];
+        return `<div class="dt-row">
+          <span class="dt-time">${esc(times[t.id] || '')}</span>
+          <span class="dt-check">✓</span>
+          <span class="dt-name">${esc(t.title)}</span>
+          <span class="tag" style="color:${p.color};border-color:${p.color}55">${p.icon} ${p.name}</span>
+          <button class="dt-undo" data-undo="${t.id}" title="不小心按到的話，按這裡取消完成">取消</button>
+        </div>`;
+      }).join('')}
+    </div>
+    <p class="hint">最新完成的在最上面。如果有哪件是不小心按到的，按右邊的「取消」就會變回未完成。</p>
+  </div>`;
+}
+
 function viewToday() {
   const today = ymd();
   const lg = dayLog(today);
@@ -811,6 +840,8 @@ function viewToday() {
         ? `<div class="empty"><span class="big">🌤</span>今天沒有排事情<br><span class="dim">在最上面的輸入框打字就能新增</span></div>`
         : `<div class="tasklist">${sorted.map(t => taskItem(t, lg)).join('')}</div>`}
     </div>
+
+    ${doneTodayCard(today)}
 
     ${goalCards.length ? `<div class="card">
       <h2>🎯 長期目標<span class="sub">進行中</span></h2>
@@ -2294,6 +2325,15 @@ function wire() {
   $$('[data-toggle]').forEach(el => el.addEventListener('click', (e) => {
     if (justDragged()) return;
     toggleTask(el.dataset.toggle, e, el.dataset.tdate);
+  }));
+
+  // 今日「今天完成了」：取消誤觸的完成
+  $$('[data-undo]').forEach(el => el.addEventListener('click', (e) => {
+    const id = el.dataset.undo;
+    const t = S.tasks.find(x => x.id === id);
+    if (!t || !doneOn(ymd(), id)) return;
+    toggleTask(id, e, ymd());
+    toast(`↩ 已取消「${t.title}」的完成`);
   }));
 
   // 首頁的目標小卡 → 跳到目標分頁
