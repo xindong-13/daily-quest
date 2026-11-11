@@ -69,7 +69,7 @@ function blankState() {
     goals: [],
     courses: [],      // 課表：{ id, day(1~5=一~五), period('1'~'8'/'A'~'D'), title, location, archived }
     courseColors: {}, // 課表：{ 課程名稱: '#hex' }，使用者自己挑的顏色，優先於自動配色
-    log: {},          // 'YYYY-MM-DD' -> { done:[id], times:{id:'HH:MM'}, perfect }
+    log: {},          // 'YYYY-MM-DD' -> { done:[id], times:{id:'HH:MM'}, at:{id:'實際完成的 YYYY-MM-DD HH:MM'}, perfect }
     dayOrder: {},     // 'YYYY-MM-DD' -> [taskId...]  某天手動排過的順序
     streak: { current: 0, best: 0, lastActive: null },
     stats: { totalDone: 0, perfectDays: 0 },
@@ -456,6 +456,7 @@ function toggleTask(id, ev, date) {
   if (idx >= 0) {
     lg.done.splice(idx, 1);
     delete lg.times[id];
+    if (lg.at) delete lg.at[id];
     S.stats.totalDone = Math.max(0, S.stats.totalDone - 1);
     if (lg.perfect) { lg.perfect = false; S.stats.perfectDays = Math.max(0, S.stats.perfectDays - 1); }
   } else {
@@ -464,6 +465,9 @@ function toggleTask(id, ev, date) {
     const mm = String(now.getMinutes()).padStart(2, '0');
     lg.done.push(id);
     lg.times[id] = isToday ? `${hh}:${mm}` : (isFuture ? '提前完成' : '補記');
+    // 實際按下完成的日期與時間（不管勾的是哪一天的任務），給「今天完成了」清單用
+    if (!lg.at) lg.at = {};
+    lg.at[id] = `${ymd()} ${hh}:${mm}`;
     S.stats.totalDone++;
 
     if (isToday) bumpStreak();
@@ -778,28 +782,45 @@ function quickTodoCard(todos, lg, today) {
   </div>`;
 }
 
-/* 今天完成了：照勾選時間列出今天打勾的所有事（含逾期、隨手待辦），
+/* 今天完成了：列出「今天實際按下完成」的所有事，不管勾的是哪一天的任務
+   （今天的、補勾昨天的、提前勾明天的、逾期、隨手待辦都算），照按下的時間排。
    方便回頭檢查有沒有誤觸，也順便看一下今天的成果。
-   只讀今天的紀錄，「取消」就是一般的取消勾選，不會動到別天。 */
+   「取消」就是對那一天的那筆紀錄取消勾選，不會動到別天。 */
+function doneTodayRows(today) {
+  const rows = [];
+  for (const d of Object.keys(S.log)) {
+    const lg = S.log[d] || {};
+    const at = lg.at || {}, times = lg.times || {};
+    for (const id of (lg.done || [])) {
+      const t = S.tasks.find(x => x.id === id);
+      if (!t) continue;
+      let when = at[id];
+      // 舊紀錄沒有「實際完成時間」：今天那格裡、有記到時間的，就當作今天完成
+      if (!when && d === today && /^\d\d:\d\d$/.test(times[id] || '')) when = `${today} ${times[id]}`;
+      if (!when && d === today) when = `${today} `;
+      if (!when || when.slice(0, 10) !== today) continue;
+      rows.push({ t, day: d, time: when.slice(11) });
+    }
+  }
+  return rows.sort((a, b) => b.time.localeCompare(a.time));
+}
 function doneTodayCard(today) {
-  const lg = S.log[today];
-  const times = (lg && lg.times) || {};
-  const rows = ((lg && lg.done) || [])
-    .map(id => S.tasks.find(t => t.id === id))
-    .filter(Boolean)
-    .sort((a, b) => String(times[b.id] || '').localeCompare(String(times[a.id] || '')));
+  const rows = doneTodayRows(today);
   if (!rows.length) return '';
   return `<div class="card done-today">
     <h2>🏆 今天完成了</h2>
     <div class="dt-list">
-      ${rows.map(t => {
+      ${rows.map(({ t, day, time }) => {
         const pk = prioOf(t), p = PRIO[pk];
+        // 勾的是別天的任務，就標一下是哪一天的
+        const which = day === today ? '' : `<span class="tag">${day < today ? '補' : '提前'} ${fmtMD(day)}</span>`;
         return `<div class="dt-row">
-          <span class="dt-time">${esc(times[t.id] || '')}</span>
+          <span class="dt-time">${esc(time)}</span>
           <span class="dt-check">✓</span>
           <span class="dt-name">${esc(t.title)}</span>
+          ${which}
           <span class="tag" style="color:${p.color};border-color:${p.color}55">${p.icon} ${p.name}</span>
-          <button class="dt-undo" data-undo="${t.id}" title="不小心按到的話，按這裡取消完成">取消</button>
+          <button class="dt-undo" data-undo="${t.id}" data-undo-day="${day}" title="不小心按到的話，按這裡取消完成">取消</button>
         </div>`;
       }).join('')}
     </div>
@@ -2331,8 +2352,9 @@ function wire() {
   $$('[data-undo]').forEach(el => el.addEventListener('click', (e) => {
     const id = el.dataset.undo;
     const t = S.tasks.find(x => x.id === id);
-    if (!t || !doneOn(ymd(), id)) return;
-    toggleTask(id, e, ymd());
+    const day = el.dataset.undoDay || ymd();
+    if (!t || !doneOn(day, id)) return;
+    toggleTask(id, e, day);
     toast(`↩ 已取消「${t.title}」的完成`);
   }));
 
