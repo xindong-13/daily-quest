@@ -69,6 +69,7 @@ function blankState() {
     goals: [],
     courses: [],      // 課表：{ id, day(1~5=一~五), period('1'~'8'/'A'~'D'), title, location, archived }
     courseColors: {}, // 課表：{ 課程名稱: '#hex' }，使用者自己挑的顏色，優先於自動配色
+    shopping: [],     // 要買的東西：{ id, title, done, createdAt, archived }，只顯示在目標頁，不進每日統計
     log: {},          // 'YYYY-MM-DD' -> { done:[id], times:{id:'HH:MM'}, at:{id:'實際完成的 YYYY-MM-DD HH:MM'}, perfect }
     dayOrder: {},     // 'YYYY-MM-DD' -> [taskId...]  某天手動排過的順序
     streak: { current: 0, best: 0, lastActive: null },
@@ -94,6 +95,7 @@ function migrate(o) {
     goals: Array.isArray(o.goals) ? o.goals : [],
     tasks: Array.isArray(o.tasks) ? o.tasks : [],
     courses: Array.isArray(o.courses) ? o.courses : [],
+    shopping: Array.isArray(o.shopping) ? o.shopping : [],
     courseColors: (o.courseColors && typeof o.courseColors === 'object') ? o.courseColors : {},
     log: o.log && typeof o.log === 'object' ? o.log : {},
     dayOrder: (o.dayOrder && typeof o.dayOrder === 'object') ? o.dayOrder : {},
@@ -1744,6 +1746,7 @@ function viewGoals() {
   const done = S.goals.filter(g => !g.archived && goalStats(g).done);
 
   return `
+    ${shoppingCard()}
     ${live.length ? live.map(goalCard).join('') : ''}
     ${done.length ? `<div class="card"><h2>🏆 已達成<span class="sub">${done.length} 個</span></h2>
       ${done.map(g => `<div class="gdone">
@@ -1772,6 +1775,38 @@ function viewGoals() {
       <button class="btn" id="g-add">建立目標</button>
       <p class="hint">建立後，每完成一次就按 ＋1 記一筆（可以順便寫下是哪一本、哪一次），App 會幫你算進度、速度、還差多少。</p>
     </div>`;
+}
+
+/* 要買的東西：簡單清單，勾掉＝買到了；不會出現在今日，也不算進成績 */
+function shoppingCard() {
+  const items = (S.shopping || []).filter(x => !x.archived);
+  const todo = items.filter(x => !x.done), got = items.filter(x => x.done);
+  const row = (x) => `
+    <div class="task p-normal${x.done ? ' done' : ''}" data-shtoggle="${x.id}">
+      <div class="check">✓</div>
+      <div class="t-main"><div class="t-name">${esc(x.title)}</div></div>
+      <button class="icobtn del sm" data-shdel="${x.id}" title="刪除">🗑</button>
+    </div>`;
+  return `<div class="card">
+    <h2>🛒 要買的東西<span class="sub">${!items.length ? '想到就記下來' : todo.length ? `還有 ${todo.length} 樣` : '都買齊了'}</span></h2>
+    <label class="fld"><span>例如：牙膏、電池</span>
+      <input id="sh-title" placeholder="要買什麼" maxlength="40"></label>
+    <button class="btn" id="sh-add" style="margin-top:8px">加入</button>
+    ${items.length ? `<div class="tasklist" style="margin-top:14px">${todo.concat(got).map(row).join('')}</div>` : ''}
+    ${got.length ? `<button class="btn ghost" id="sh-clear" style="margin-top:10px">清掉已買到的（${got.length} 樣）</button>` : ''}
+    ${items.length ? '' : '<p class="hint">買到了點一下就會打勾。這裡的東西不會出現在「今日」。</p>'}
+  </div>`;
+}
+
+function addShopping() {
+  const el = $('#sh-title'); if (!el) return;
+  const title = el.value.trim();
+  if (!title) return toast('請輸入要買的東西');
+  if (!Array.isArray(S.shopping)) S.shopping = [];
+  S.shopping.push({ id: uid(), title, done: false, createdAt: ymd(), archived: false });
+  save(); render();
+  toast(`🛒 已加入「${title}」`);
+  const i = $('#sh-title'); if (i && i.focus) i.focus();   // 方便連續輸入好幾樣
 }
 
 function goalCard(g) {
@@ -2457,6 +2492,26 @@ function wire() {
   }));
   $$('[data-scedit]').forEach(el => el.addEventListener('click', () => openCourseEdit(null, null, el.dataset.scedit)));
 
+  // 要買的東西
+  if ($('#sh-add')) $('#sh-add').addEventListener('click', addShopping);
+  if ($('#sh-title')) $('#sh-title').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) addShopping(); });
+  $$('[data-shtoggle]').forEach(el => el.addEventListener('click', () => {
+    const x = (S.shopping || []).find(i => i.id === el.dataset.shtoggle);
+    if (!x) return;
+    x.done = !x.done;
+    save(); render();
+  }));
+  $$('[data-shdel]').forEach(b => b.addEventListener('click', (e) => {
+    e.stopPropagation();   // 刪除鈕在可勾選的那一列裡面，不擋的話會順便被勾掉
+    const x = (S.shopping || []).find(i => i.id === b.dataset.shdel);
+    if (x) x.archived = true;   // 用標記而非真的刪掉，同步時才不會被另一台的舊資料救回來
+    save(); render();
+  }));
+  if ($('#sh-clear')) $('#sh-clear').addEventListener('click', () => {
+    (S.shopping || []).forEach(x => { if (x.done) x.archived = true; });
+    save(); render(); toast('已清掉買到的東西');
+  });
+
   // 長期目標
   $$('[data-ginc]').forEach(b => b.addEventListener('click', () => openGoalEntry(b.dataset.ginc)));
   $$('[data-glog]').forEach(b => b.addEventListener('click', () => openGoalLog(b.dataset.glog)));
@@ -2840,6 +2895,7 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
 function contentSig(st) {
   return JSON.stringify({
     tasks: st.tasks, goals: st.goals, log: st.log, dayOrder: st.dayOrder,
+    shopping: st.shopping,
     name: st.profile && st.profile.name, settings: st.settings,
     streak: st.streak,
   });
@@ -2904,6 +2960,17 @@ function mergeStates(local, remote) {
     cMap.set(c.id, n);
   }
   out.courses = Array.from(cMap.values());
+
+  // 要買的東西：以 id 聯集，刪除用 archived 標記，不會被合併救回來
+  const shMap = new Map();
+  for (const x of (secondary.shopping || [])) shMap.set(x.id, x);
+  for (const x of (primary.shopping || [])) {
+    const old = shMap.get(x.id);
+    const n = clone(x);
+    if (old && old.archived && !n.archived) n.archived = true;
+    shMap.set(x.id, n);
+  }
+  out.shopping = Array.from(shMap.values());
 
   // 課程顏色：聯集，同一個名稱兩邊都設過的話取主要那份
   out.courseColors = { ...(secondary.courseColors || {}), ...(primary.courseColors || {}) };
@@ -3030,7 +3097,7 @@ function flushPush() {
 
 function stateIsEmpty(s) {
   return (!s.tasks || s.tasks.length === 0) && Object.keys(s.log || {}).length === 0
-      && (!s.goals || s.goals.length === 0);
+      && (!s.goals || s.goals.length === 0) && (!s.shopping || s.shopping.length === 0);
 }
 
 /* 第一次連線：雲端和本機都有資料時，讓使用者決定留哪一份 */
